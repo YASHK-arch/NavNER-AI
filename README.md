@@ -82,7 +82,9 @@ The backend will:
 ### 3. Web Dashboard
 
 ```bash
-
+cd web
+npm install
+npm run dev
 ```
 
 Opens the Command Center at `http://localhost:5173`.

@@ -102,7 +102,7 @@ export function MapScreen() {
           latitudeDelta: 0.15,
           longitudeDelta: 0.15,
         }}
-        mapType="mutedStandard"
+        mapType={Platform.OS === 'android' ? 'standard' : 'mutedStandard'}
         userInterfaceStyle="dark"
         onPress={handleMapPress}
         showsUserLocation={false}
