@@ -30,8 +30,15 @@ async def lifespan(app: FastAPI):
     start_scheduler()
     print("✅ Risk evaluation scheduler started.")
 
+    # Start live telemetry simulator
+    import asyncio
+    from app.telemetry_simulator import run_telemetry_simulator
+    telemetry_task = asyncio.create_task(run_telemetry_simulator())
+    print("✅ Telemetry simulator started.")
+
     yield
 
+    telemetry_task.cancel()
     stop_scheduler()
     await engine.dispose()
 

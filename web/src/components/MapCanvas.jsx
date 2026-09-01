@@ -69,28 +69,13 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, se
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: {
-        version: 8,
-        sources: {
-          'google-satellite': {
-            type: 'raster',
-            tiles: [MAP_TILE_URL],
-            tileSize: 256,
-            attribution: '&copy; Google',
-          },
-        },
-        layers: [{
-          id: 'google-satellite-layer',
-          type: 'raster',
-          source: 'google-satellite',
-          minzoom: 0,
-          maxzoom: 19,
-        }],
-      },
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center: [91.74, 26.15], // Centered directly on Guwahati hazard cluster
       zoom: 11.5, // High zoom needed to clearly see H3 resolution 7 grid cells
-      pitch: 45,
-      bearing: -12,
+      pitch: 0,
+      bearing: 0,
+      dragRotate: false,
+      touchZoomRotate: false,
       minZoom: 4,
       maxZoom: 18,
     });
@@ -268,12 +253,11 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, se
     const v = selectedTripVehicle;
     if (v.lat == null || v.lng == null) return;
 
-    // Smooth camera fly to street-level 3D view — Uber style
+    // Smooth camera fly to street-level 2D view
     map.easeTo({
       center: [v.lng, v.lat],
-      zoom: 12,
-      pitch: 55,
-      bearing: -20,
+      zoom: 14,
+      pitch: 0,
       duration: 1400,
       easing: t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
     });
@@ -283,7 +267,7 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, se
   useEffect(() => {
     if (mapRef.current && mapContainer.current) {
       mapContainer.current.__flyTo = (lng, lat) => {
-        mapRef.current.easeTo({ center: [lng, lat], zoom: 12, pitch: 50, duration: 1000 });
+        mapRef.current.easeTo({ center: [lng, lat], zoom: 14, pitch: 0, duration: 1000 });
       };
     }
   });
