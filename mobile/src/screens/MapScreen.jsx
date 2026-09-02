@@ -126,14 +126,7 @@ export function MapScreen() {
             strokeWidth={4}
           />
         )}
-        {liveSelectedTruck?.rerouted && liveSelectedTruck.originalRoute && (
-          <Polyline
-            coordinates={liveSelectedTruck.originalRoute}
-            strokeColor="#EF4444"
-            strokeWidth={2.5}
-            lineDashPattern={[8, 6]}
-          />
-        )}
+
       </MapView>
 
       {/* Map Header Overlay */}

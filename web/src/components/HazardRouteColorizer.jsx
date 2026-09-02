@@ -170,47 +170,52 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
         const tripKey    = trip.trip_id.slice(0, 8);
         const isSelected = trip.trip_id === selectedTripId;
         const dimmed     = Boolean(selectedTripId) && !isSelected;
+        const isRerouted  = trip.status === 'REROUTED';
 
-        const segments  = buildColoredSegments(coords, hazardFeatures);
-        const lineWidth = isSelected ? 7 : (dimmed ? 1.5 : 4);
-        const opacity   = dimmed ? 0.18 : 1.0;
-        const casingW   = isSelected ? 12 : (dimmed ? 0 : 7);
-        const casingOp  = dimmed ? 0 : (isSelected ? 0.35 : 0.2);
+        // Rerouted trips use FleetRouteViewer's animated red dotted bypass.
+        // Do not paint the normal hazard segments over that visual treatment.
+        if (!isRerouted) {
+          const segments  = buildColoredSegments(coords, hazardFeatures);
+          const lineWidth = isSelected ? 7 : (dimmed ? 1.5 : 4);
+          const opacity   = dimmed ? 0.18 : 1.0;
+          const casingW   = isSelected ? 12 : (dimmed ? 0 : 7);
+          const casingOp  = dimmed ? 0 : (isSelected ? 0.35 : 0.2);
 
-        segments.forEach((seg, idx) => {
-          const risk     = seg.risk;
-          const color    = SEGMENT_COLORS[risk]  || SEGMENT_COLORS.CLEAR;
-          const caseCol  = CASING_COLORS[risk]   || CASING_COLORS.CLEAR;
-          const srcId    = `${SEG_SOURCE_PREFIX}${tripKey}-${idx}`;
-          const casingId = `${SEG_CASING_PREFIX}${tripKey}-${idx}`;
-          const layerId  = `${SEG_LAYER_PREFIX}${tripKey}-${idx}`;
+          segments.forEach((seg, idx) => {
+            const risk     = seg.risk;
+            const color    = SEGMENT_COLORS[risk]  || SEGMENT_COLORS.CLEAR;
+            const caseCol  = CASING_COLORS[risk]   || CASING_COLORS.CLEAR;
+            const srcId    = `${SEG_SOURCE_PREFIX}${tripKey}-${idx}`;
+            const casingId = `${SEG_CASING_PREFIX}${tripKey}-${idx}`;
+            const layerId  = `${SEG_LAYER_PREFIX}${tripKey}-${idx}`;
 
-          map.addSource(srcId, {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              properties: { risk, trip_id: trip.trip_id },
-              geometry: { type: 'LineString', coordinates: seg.coordinates },
-            },
+            map.addSource(srcId, {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: { risk, trip_id: trip.trip_id },
+                geometry: { type: 'LineString', coordinates: seg.coordinates },
+              },
+            });
+            sourceIdsRef.current.add(srcId);
+
+            // Shadow / casing layer (drawn first)
+            map.addLayer({
+              id: casingId, type: 'line', source: srcId,
+              paint: { 'line-color': caseCol, 'line-width': casingW, 'line-opacity': casingOp },
+              layout: { 'line-cap': 'round', 'line-join': 'round' },
+            });
+            layerIdsRef.current.add(casingId);
+
+            // Colored route segment on top
+            map.addLayer({
+              id: layerId, type: 'line', source: srcId,
+              paint: { 'line-color': color, 'line-width': lineWidth, 'line-opacity': opacity },
+              layout: { 'line-cap': 'round', 'line-join': 'round' },
+            });
+            layerIdsRef.current.add(layerId);
           });
-          sourceIdsRef.current.add(srcId);
-
-          // Shadow / casing layer (drawn first)
-          map.addLayer({
-            id: casingId, type: 'line', source: srcId,
-            paint: { 'line-color': caseCol, 'line-width': casingW, 'line-opacity': casingOp },
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
-          });
-          layerIdsRef.current.add(casingId);
-
-          // Colored route segment on top
-          map.addLayer({
-            id: layerId, type: 'line', source: srcId,
-            paint: { 'line-color': color, 'line-width': lineWidth, 'line-opacity': opacity },
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
-          });
-          layerIdsRef.current.add(layerId);
-        });
+        }
 
         // ETA chip at route midpoint — only for selected trip
         if (isSelected) {
@@ -221,8 +226,6 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
           const distKm = approxDistKm(coords);
           const shortOrigin = (trip.origin_name || '').split(',')[0];
           const shortDest   = (trip.dest_name   || '').split(',')[0];
-          const isRerouted  = trip.status === 'REROUTED';
-
           const el = document.createElement('div');
           el.className = `route-eta-chip${isRerouted ? ' route-eta-chip--rerouted' : ''}`;
           el.innerHTML = `

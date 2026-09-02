@@ -155,6 +155,16 @@ export function FleetSideDrawer({
               key={trip.trip_id}
               className={`logistics-trip-card ${isSelected ? 'selected' : ''}`}
               onClick={() => onSelectTrip?.(trip.trip_id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelectTrip?.(trip.trip_id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
+              aria-label={`Select vehicle ${trip.license_plate || trip.vehicle_name}`}
               id={`fleet-trip-${trip.trip_id.slice(0, 8)}`}
             >
               {/* Card Header Row */}

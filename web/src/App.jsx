@@ -143,7 +143,9 @@ function App() {
   // Find the vehicle for the selected trip (for map camera)
   const selectedTripVehicle = useMemo(() => {
     if (!selectedTrip || !vehicles.length) return null;
-    return vehicles.find(v => v.id === selectedTrip.vehicle_id) || null;
+    // The two endpoints both serialize UUIDs today, but normalising here keeps
+    // the camera/marker selection reliable if either transport changes shape.
+    return vehicles.find(v => String(v.id) === String(selectedTrip.vehicle_id)) || null;
   }, [selectedTrip, vehicles]);
 
   // Route geometry for the selected trip — memoised so the map camera effect
@@ -156,7 +158,9 @@ function App() {
   // Selecting a truck on the map resolves it to its active trip, so the route
   // highlight and detail panel behave exactly as they do from the sidebar.
   const handleVehicleClick = useCallback((vehicle) => {
-    const trip = fleetData?.active_trips?.find(t => t.vehicle_id === vehicle.id);
+    const trip = fleetData?.active_trips?.find(
+      t => String(t.vehicle_id) === String(vehicle.id),
+    );
     if (trip) setSelectedTripId(trip.trip_id);
   }, [fleetData]);
 

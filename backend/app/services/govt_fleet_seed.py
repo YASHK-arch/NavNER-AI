@@ -30,6 +30,7 @@ from app.models import (
     VehicleStatus,
     VehicleTrip,
     VehicleType,
+    RerouteLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,34 +129,49 @@ LAST_MILE_CLASSES = [
 ]
 
 
-def _plan() -> list[tuple[str, VehicleClass, VehicleType, float, Corridor]]:
-    """The full 50-vehicle roster: (plate, class, chassis, tons, corridor)."""
-    roster: list[tuple[str, VehicleClass, VehicleType, float, Corridor]] = []
+def _plan() -> list[tuple[str, VehicleClass, VehicleType, float, Corridor, TripStatus, TripPriority]]:
+    """The 15-vehicle roster: (plate, class, chassis, tons, corridor, status, priority)."""
+    roster: list[tuple[str, VehicleClass, VehicleType, float, Corridor, TripStatus, TripPriority]] = []
 
-    for i in range(TRUNK_FLEET_SIZE):
+    # 5 On-Way (IN_TRANSIT, STANDARD)
+    for i in range(5):
         corridor = TRUNK_CORRIDORS[i % len(TRUNK_CORRIDORS)]
         roster.append((
-            f"AS-01-FCI-{9901 + i}",
+            f"AS-01-ONW-{100 + i}",
             VehicleClass.HEAVY_TRUCK,
             VehicleType.truck,
             18.0,
             corridor,
+            TripStatus.IN_TRANSIT,
+            TripPriority.STANDARD,
         ))
 
-    for i in range(LAST_MILE_FLEET_SIZE):
+    # 5 Emergency (IN_TRANSIT, EMERGENCY)
+    for i in range(5):
         corridor = FLOOD_CORRIDORS[i % len(FLOOD_CORRIDORS)]
         vclass = LAST_MILE_CLASSES[i % len(LAST_MILE_CLASSES)]
-        chassis = (
-            VehicleType.ambulance
-            if vclass is VehicleClass.AMBULANCE
-            else VehicleType.utility
-        )
+        chassis = VehicleType.ambulance if vclass is VehicleClass.AMBULANCE else VehicleType.utility
         roster.append((
-            f"AS-11-NDRF-{401 + i}",
+            f"AS-11-EMG-{200 + i}",
             vclass,
             chassis,
             3.5 if vclass is not VehicleClass.NDRF_BOAT else 1.5,
             corridor,
+            TripStatus.IN_TRANSIT,
+            TripPriority.EMERGENCY,
+        ))
+
+    # 5 Rerouted (REROUTED, HIGH_PRIORITY)
+    for i in range(5):
+        corridor = TRUNK_CORRIDORS[(i + 2) % len(TRUNK_CORRIDORS)]
+        roster.append((
+            f"AS-01-RER-{300 + i}",
+            VehicleClass.HEAVY_TRUCK,
+            VehicleType.truck,
+            18.0,
+            corridor,
+            TripStatus.REROUTED,
+            TripPriority.HIGH_PRIORITY,
         ))
 
     return roster
@@ -201,7 +217,7 @@ async def seed_government_fleet(db: AsyncSession, govt_db: AsyncSession) -> dict
     trips_created = 0
     backfilled = 0
 
-    for index, (plate, vclass, chassis, tons, corridor) in enumerate(roster):
+    for index, (plate, vclass, chassis, tons, corridor, trip_status, trip_priority) in enumerate(roster):
         if plate in existing_govt:
             continue
 
@@ -254,19 +270,31 @@ async def seed_government_fleet(db: AsyncSession, govt_db: AsyncSession) -> dict
         await db.refresh(vehicle, ["id"])
         created += 1
 
-        db.add(
-            VehicleTrip(
-                vehicle_id=vehicle.id,
-                origin_name=corridor.origin_name,
-                origin_coords=ST_MakePoint(*corridor.origin),
-                dest_name=corridor.dest_name,
-                dest_coords=ST_MakePoint(*corridor.dest),
-                commodity_type=corridor.commodity,
-                priority_level=corridor.priority,
-                status=TripStatus.IN_TRANSIT,
-            )
+        trip = VehicleTrip(
+            vehicle_id=vehicle.id,
+            origin_name=corridor.origin_name,
+            origin_coords=ST_MakePoint(*corridor.origin),
+            dest_name=corridor.dest_name,
+            dest_coords=ST_MakePoint(*corridor.dest),
+            commodity_type=corridor.commodity,
+            priority_level=trip_priority,
+            status=trip_status,
+            last_rerouted_at=datetime.now(timezone.utc) if trip_status == TripStatus.REROUTED else None
         )
+        db.add(trip)
+        await db.flush()
+        await db.refresh(trip, ["trip_id"])
         trips_created += 1
+
+        if trip_status == TripStatus.REROUTED:
+            log = RerouteLog(
+                trip_id=trip.trip_id,
+                trigger_reason="HAZARD_AVOIDANCE",
+                old_eta=datetime.now(timezone.utc) + timedelta(minutes=60),
+                new_eta=datetime.now(timezone.utc) + timedelta(minutes=75),
+                delay_variance_minutes=15,
+            )
+            db.add(log)
 
         govt_db.add(
             FleetVehicle(
