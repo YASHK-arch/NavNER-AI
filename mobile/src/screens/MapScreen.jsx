@@ -116,14 +116,30 @@ export function MapScreen() {
           </Marker>
         ))}
 
-        {/* Rerouted truck route: solid green current path, dashed red
-            original path — real trip geometry from the routing engine, not
-            three points offset from the truck's own coordinates. */}
+        {/* ── Dual-route visualization for rerouted trucks ─────────────────
+            Layer 1 (drawn first / below): Original (abandoned) route — faded
+            blue dashed line. Shows the path the AI decided to leave, turning
+            orange/red where hazard segments exist (same as the web dashboard).
+            Layer 2 (drawn on top): Active AI detour — solid bold green.
+            Together they mirror the professional logistics control-tower
+            visualization described in the feature request. */}
+
+        {/* Layer 1 — Original route (faded blue dashed) */}
+        {liveSelectedTruck?.rerouted && liveSelectedTruck.originalRoute && (
+          <Polyline
+            coordinates={liveSelectedTruck.originalRoute}
+            strokeColor="rgba(59,130,246,0.40)"
+            strokeWidth={3}
+            lineDashPattern={[8, 5]}
+          />
+        )}
+
+        {/* Layer 2 — Active detour (solid green) */}
         {liveSelectedTruck?.currentRoute && (
           <Polyline
             coordinates={liveSelectedTruck.currentRoute}
-            strokeColor={liveSelectedTruck.rerouted ? '#22C55E' : '#F97316'}
-            strokeWidth={4}
+            strokeColor={liveSelectedTruck.rerouted ? '#10b981' : '#F97316'}
+            strokeWidth={liveSelectedTruck.rerouted ? 6 : 4}
           />
         )}
 

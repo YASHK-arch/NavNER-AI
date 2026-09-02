@@ -199,19 +199,16 @@ export function TripDetailPanel({ trip, instructions, onClose, onAcceptRoute, on
               {instructions.map((step, i) => (
                 <div key={i} className="instruction-step" style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
                   <div className="instruction-icon" style={{ fontSize: '1.2em' }}>
-                    {step.action === 'turn_left' ? '↩️' : step.action === 'turn_right' ? '↪️' : step.action === 'arrive' ? '📍' : '⬆️'}
+                    {step.instruction?.toLowerCase().includes('left') ? '↩️' : step.instruction?.toLowerCase().includes('right') ? '↪️' : step.instruction?.toLowerCase().includes('arrive') ? '📍' : '⬆️'}
                   </div>
                   <div className="instruction-content" style={{ flex: 1 }}>
-                    <div className="instruction-action" style={{ fontWeight: 600, fontSize: '0.9em', textTransform: 'capitalize', color: 'var(--text-primary)' }}>
-                      {step.action.replace('_', ' ')}
-                    </div>
-                    <div className="instruction-road" style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
-                      {step.road_name || 'Unnamed Road'}
+                    <div className="instruction-action" style={{ fontWeight: 600, fontSize: '0.9em', color: 'var(--text-primary)' }}>
+                      {step.instruction || 'Continue on route'}
                     </div>
                   </div>
-                  {step.distance_meters > 0 && (
+                  {step.distance_km > 0 && (
                     <div className="instruction-distance" style={{ fontSize: '0.85em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {step.distance_meters >= 1000 ? `${(step.distance_meters / 1000).toFixed(1)} km` : `${Math.round(step.distance_meters)} m`}
+                      {step.distance_km >= 1 ? `${step.distance_km.toFixed(1)} km` : `${Math.round(step.distance_km * 1000)} m`}
                     </div>
                   )}
                 </div>

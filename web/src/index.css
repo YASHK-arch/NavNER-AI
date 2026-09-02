@@ -815,6 +815,13 @@ button { cursor: pointer; }
   animation-delay: var(--bypass-flow-delay, 0s);
 }
 
+/* Green variant for AI detour dots */
+.bypass-route-flow-dot--green {
+  border-color: rgba(209, 250, 229, 0.95);
+  background: #10b981;
+  box-shadow: 0 0 0 1px rgba(6, 78, 59, 0.65), 0 0 12px rgba(16, 185, 129, 0.85);
+}
+
 @keyframes bypass-route-flow {
   0%, 100% { opacity: 0.25; transform: scale(0.55); }
   50% { opacity: 1; transform: scale(1.15); }
@@ -823,6 +830,50 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .bypass-route-flow-dot { animation: none; }
 }
+
+/* ── AI Detour Initiated badge — appears at the divergence point ─────── */
+.ai-detour-badge {
+  pointer-events: none;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.55));
+}
+
+.ai-detour-badge__inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  border: 1.5px solid rgba(52, 211, 153, 0.6);
+  border-radius: 20px;
+  padding: 5px 11px 5px 8px;
+  white-space: nowrap;
+  /* arrow pointing down */
+  position: relative;
+}
+
+.ai-detour-badge__inner::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: #065f46;
+  border-bottom: none;
+}
+
+.ai-detour-badge__icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ai-detour-badge__text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6ee7b7;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
 
 /* ── RIGHT PANEL — Trip Detail ───────────────────────────────────── */
 .trip-detail-panel {
@@ -2842,3 +2893,21 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
 }
 .fleet-incident-add-btn:hover { background: rgba(249, 115, 22, 0.22); }
+
+/* Hazard hover popup styling */
+.hazard-hover-popup {
+  pointer-events: none !important;
+  z-index: 100;
+}
+.hazard-hover-popup .maplibregl-popup-content {
+  background: rgba(20, 20, 20, 0.85) !important;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  pointer-events: none !important;
+}
+.hazard-hover-popup .maplibregl-popup-tip {
+  border-top-color: rgba(20, 20, 20, 0.85) !important;
+}

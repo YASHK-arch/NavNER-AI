@@ -46,6 +46,7 @@ export function HazardMapOverlay({ map, hazardData, enabled }) {
   const [showLayer, setShowLayer] = useState(true);
   const [minRiskPct, setMinRiskPct] = useState(0);
   const popupRef = useRef(null);
+  const hoverPopupRef = useRef(null);
   const layersAddedRef = useRef(false);
 
   // Filter features based on slider threshold
@@ -175,17 +176,44 @@ export function HazardMapOverlay({ map, hazardData, enabled }) {
     const handleMouseMove = (e) => {
       if (!e.features?.length) return;
       map.getCanvas().style.cursor = 'pointer';
+      
+      const props = e.features[0].properties;
+      const h3Index = props.h3_index;
+      
       map.setPaintProperty(HIGHLIGHT_LAYER_ID, 'fill-opacity', [
         'case',
-        ['==', ['get', 'h3_index'], e.features[0].properties.h3_index],
+        ['==', ['get', 'h3_index'], h3Index],
         0.15,
         0,
       ]);
+
+      if (hoverPopupRef.current) hoverPopupRef.current.remove();
+
+      const riskColor = RISK_COLORS[props.risk_level] || '#888';
+      const threat = props.primary_threat || 'Hazard Zone';
+
+      const html = `
+        <div style="padding: 4px 6px; font-family: sans-serif; pointer-events: none;">
+          <strong style="color: ${riskColor}; font-size: 13px;">${props.risk_level}</strong>
+          <div style="color: #bbb; font-size: 11px; margin-top: 2px;">${threat}</div>
+        </div>
+      `;
+
+      hoverPopupRef.current = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 15,
+        className: 'hazard-hover-popup',
+      })
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(map);
     };
 
     const handleMouseLeave = () => {
       map.getCanvas().style.cursor = '';
       map.setPaintProperty(HIGHLIGHT_LAYER_ID, 'fill-opacity', 0);
+      if (hoverPopupRef.current) hoverPopupRef.current.remove();
     };
 
     // Click popup — shows hazard details and zooms to street level so the

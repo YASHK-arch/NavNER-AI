@@ -172,8 +172,13 @@ export function FleetSideDrawer({
                 <div className="logistics-card-icon">
                   <span>{commodityIcon}</span>
                 </div>
-                <div className="logistics-card-id">
-                  {trip.license_plate || trip.vehicle_name}
+                <div className="logistics-card-id-wrapper" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                  <div className="logistics-card-id" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {trip.license_plate || trip.vehicle_name}
+                  </div>
+                  <div className="logistics-card-route-preview" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.85)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '1px' }}>
+                    {trip.origin_name?.split(',')[0] || 'Origin'} → {trip.dest_name?.split(',')[0] || 'Destination'}
+                  </div>
                 </div>
                 <span className={`logistics-status-badge ${isRerouted ? 'rerouted' : prio.class}`}>
                   {isRerouted ? 'Rerouted' : prio.label}

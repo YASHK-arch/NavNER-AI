@@ -1,15 +1,17 @@
 /**
- * HazardRouteColorizer — Splits each trip's road-snapped polyline into
- * segments colored by the H3 hazard hexagon they pass through:
+ * HazardRouteColorizer — Segment-level hazard coloring for all fleet routes.
  *
- *   🔴 Red   — CRITICAL hazard zone
- *   🟡 Yellow — MODERATE hazard zone
- *   🔵 Blue  — CLEAR (no intersecting hazard)
+ * Non-rerouted trips:
+ *   Current route is split into segments and colored by the H3 hazard zone
+ *   each segment passes through: CLEAR→Blue, MODERATE→Yellow, HIGH→Amber,
+ *   CRITICAL→Red. This is the Google Maps / Uber-style segmented coloring.
  *
- * This produces the Google-Maps / Uber-style segmented route coloring
- * requested in Issue #63. The backend already returns real road-snapped
- * polylines from the DynamicGraphRouter; this component only handles
- * the visual coloring split.
+ * Rerouted trips:
+ *   The ORIGINAL (abandoned) route is rendered as a faded, hazard-colored
+ *   line so the evaluator can see exactly which road segments were blocked and
+ *   WHY the AI triggered the detour. The active detour is drawn by
+ *   FleetRouteViewer — this component paints only the affected original-route
+ *   segments on top of that faded blue base.
  */
 import { useEffect, useRef, useMemo } from 'react';
 import * as maplibregl from 'maplibre-gl';
@@ -137,6 +139,8 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
   const layerIdsRef  = useRef(new Set());
   const sourceIdsRef = useRef(new Set());
   const markersRef   = useRef([]);
+  const hoverPopupRef = useRef(null);
+  const activeListenersRef = useRef([]);
 
   const hazardFeatures = useMemo(() => hazardData?.features ?? [], [hazardData]);
 
@@ -155,6 +159,15 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
     for (const mk of markersRef.current) { try { mk.remove(); } catch (_) {} }
     markersRef.current = [];
 
+    const cleanupListeners = () => {
+      activeListenersRef.current.forEach(({ layerId, type, fn }) => {
+        try { map.off(type, layerId, fn); } catch (e) {}
+      });
+      activeListenersRef.current = [];
+      if (hoverPopupRef.current) hoverPopupRef.current.remove();
+    };
+    cleanupListeners();
+
     if (!fleetData?.active_trips?.length) return;
 
     const tryRender = () => {
@@ -163,6 +176,8 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
         return;
       }
 
+      const newRouteLayers = [];
+
       fleetData.active_trips.forEach(trip => {
         const coords = trip.current_route?.coordinates;
         if (!coords?.length || coords.length < 2) return;
@@ -170,11 +185,10 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
         const tripKey    = trip.trip_id.slice(0, 8);
         const isSelected = trip.trip_id === selectedTripId;
         const dimmed     = Boolean(selectedTripId) && !isSelected;
-        const isRerouted  = trip.status === 'REROUTED';
+        const isRerouted = trip.status === 'REROUTED';
 
-        // Rerouted trips use FleetRouteViewer's animated red dotted bypass.
-        // Do not paint the normal hazard segments over that visual treatment.
         if (!isRerouted) {
+          // ── Non-rerouted: hazard-colored current route ───────────────────────
           const segments  = buildColoredSegments(coords, hazardFeatures);
           const lineWidth = isSelected ? 7 : (dimmed ? 1.5 : 4);
           const opacity   = dimmed ? 0.18 : 1.0;
@@ -199,7 +213,7 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
             });
             sourceIdsRef.current.add(srcId);
 
-            // Shadow / casing layer (drawn first)
+            // Shadow / casing layer
             map.addLayer({
               id: casingId, type: 'line', source: srcId,
               paint: { 'line-color': caseCol, 'line-width': casingW, 'line-opacity': casingOp },
@@ -207,17 +221,75 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
             });
             layerIdsRef.current.add(casingId);
 
-            // Colored route segment on top
+            // Colored segment on top
             map.addLayer({
               id: layerId, type: 'line', source: srcId,
               paint: { 'line-color': color, 'line-width': lineWidth, 'line-opacity': opacity },
               layout: { 'line-cap': 'round', 'line-join': 'round' },
             });
             layerIdsRef.current.add(layerId);
+            newRouteLayers.push(layerId);
           });
+        } else {
+          // ── Rerouted: paint hazard-affected segments of the ORIGINAL route ───
+          // FleetRouteViewer renders the faded blue base line for the original
+          // path and the bold green line for the detour. Here we overlay only
+          // the AFFECTED (yellow/red) segments of the original path so the
+          // evaluator can see precisely which road blocks triggered the AI.
+          const origCoords = trip.original_route?.coordinates;
+          if (origCoords?.length >= 2) {
+            const origSegments    = buildColoredSegments(origCoords, hazardFeatures);
+            const affectedSegments = origSegments.filter(s => s.risk !== 'CLEAR');
+            const origOpacity     = dimmed ? 0.06 : (isSelected ? 0.55 : 0.38);
+            const origWidth       = isSelected ? 5 : 3;
+
+            affectedSegments.forEach((seg, idx) => {
+              const risk     = seg.risk;
+              const color    = SEGMENT_COLORS[risk] || SEGMENT_COLORS.CLEAR;
+              const caseCol  = CASING_COLORS[risk]  || CASING_COLORS.CLEAR;
+              const srcId    = `${SEG_SOURCE_PREFIX}${tripKey}-orig-${idx}`;
+              const casingId = `${SEG_CASING_PREFIX}${tripKey}-orig-${idx}`;
+              const layerId  = `${SEG_LAYER_PREFIX}${tripKey}-orig-${idx}`;
+
+              map.addSource(srcId, {
+                type: 'geojson',
+                data: {
+                  type: 'Feature',
+                  properties: { risk, trip_id: trip.trip_id, segment_type: 'ORIGINAL_AFFECTED' },
+                  geometry: { type: 'LineString', coordinates: seg.coordinates },
+                },
+              });
+              sourceIdsRef.current.add(srcId);
+
+              map.addLayer({
+                id: casingId, type: 'line', source: srcId,
+                paint: {
+                  'line-color': caseCol,
+                  'line-width': origWidth + 4,
+                  'line-opacity': origOpacity * 0.4,
+                },
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+              });
+              layerIdsRef.current.add(casingId);
+
+              // Dashed hazard-colored segment over the faded blue base
+              map.addLayer({
+                id: layerId, type: 'line', source: srcId,
+                paint: {
+                  'line-color': color,
+                  'line-width': origWidth,
+                  'line-opacity': origOpacity,
+                  'line-dasharray': [3, 2],
+                },
+                layout: { 'line-cap': 'butt', 'line-join': 'round' },
+              });
+              layerIdsRef.current.add(layerId);
+              newRouteLayers.push(layerId);
+            });
+          }
         }
 
-        // ETA chip at route midpoint — only for selected trip
+        // ETA chip at route midpoint — only for the selected trip
         if (isSelected) {
           const mid = midpoint(coords);
           if (!mid) return;
@@ -247,6 +319,63 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
             .addTo(map);
           markersRef.current.push(marker);
         }
+      });
+
+      // ── Hover interaction for route popups ─────────────────────────────────
+      const handleRouteHover = (e) => {
+        if (!e.features?.length) return;
+        map.getCanvas().style.cursor = 'pointer';
+        const props = e.features[0].properties;
+
+        if (hoverPopupRef.current) hoverPopupRef.current.remove();
+
+        const isAffectedOrig = props.segment_type === 'ORIGINAL_AFFECTED';
+        const isHazard = props.risk !== 'CLEAR';
+        
+        let badgeColor = '#3b82f6'; // default blue
+        let badgeText = isAffectedOrig ? 'Original Path (Hazard)' : 'Current Path';
+        let detailText = isAffectedOrig ? 'Blocked / Abandoned Segment' : 'Safe Corridor';
+
+        if (isHazard) {
+          badgeColor = SEGMENT_COLORS[props.risk] || badgeColor;
+          if (!isAffectedOrig) {
+            badgeText = `Current Path (${props.risk})`;
+            detailText = 'AI is navigating this hazard zone';
+          } else {
+            detailText = `AI detoured due to ${props.risk} hazard`;
+          }
+        }
+
+        const html = `
+          <div style="padding: 4px 6px; font-family: sans-serif; pointer-events: none;">
+            <strong style="color: ${badgeColor}; font-size: 13px;">${badgeText}</strong>
+            <div style="color: #bbb; font-size: 11px; margin-top: 2px;">
+              ${detailText}
+            </div>
+          </div>
+        `;
+
+        hoverPopupRef.current = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 10,
+          className: 'hazard-hover-popup', // reuse the glassmorphic styling
+        })
+          .setLngLat(e.lngLat)
+          .setHTML(html)
+          .addTo(map);
+      };
+
+      const handleRouteLeave = () => {
+        map.getCanvas().style.cursor = '';
+        if (hoverPopupRef.current) hoverPopupRef.current.remove();
+      };
+
+      newRouteLayers.forEach(layerId => {
+        map.on('mousemove', layerId, handleRouteHover);
+        map.on('mouseleave', layerId, handleRouteLeave);
+        activeListenersRef.current.push({ layerId, type: 'mousemove', fn: handleRouteHover });
+        activeListenersRef.current.push({ layerId, type: 'mouseleave', fn: handleRouteLeave });
       });
     };
 
