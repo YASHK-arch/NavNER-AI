@@ -189,6 +189,8 @@ export function useOSRMRoutes(fleetData) {
       if (!update) return trip;
 
       const enriched = { ...trip };
+      
+      // Default: active route is the primary (shortest) path
       enriched.current_route = {
         type: 'LineString',
         coordinates: update.primary,
@@ -198,7 +200,15 @@ export function useOSRMRoutes(fleetData) {
       if (trip.status === 'REROUTED') {
         const origCoords = trip.original_route?.coordinates;
         if (isDisplacementPath(origCoords) && update.alternative) {
+          // The AI rerouted to avoid the hazard. 
+          // The original intended path was the shortest path (primary).
+          // The new active detour is the longer path (alternative).
           enriched.original_route = {
+            type: 'LineString',
+            coordinates: update.primary,
+            _osrm_enriched: true,
+          };
+          enriched.current_route = {
             type: 'LineString',
             coordinates: update.alternative,
             _osrm_enriched: true,

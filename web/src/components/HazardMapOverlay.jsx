@@ -42,6 +42,8 @@ const FILL_LAYER_ID = 'hazard-fill';
 const LINE_LAYER_ID = 'hazard-line';
 const HIGHLIGHT_LAYER_ID = 'hazard-highlight';
 
+const FLOOD_HATCH_LAYER_ID = 'hazard-flood-hatch';
+
 export function HazardMapOverlay({ map, hazardData, enabled }) {
   const [showLayer, setShowLayer] = useState(true);
   const [minRiskPct, setMinRiskPct] = useState(0);
@@ -89,6 +91,7 @@ export function HazardMapOverlay({ map, hazardData, enabled }) {
         try {
           if (map.getLayer(HIGHLIGHT_LAYER_ID)) map.removeLayer(HIGHLIGHT_LAYER_ID);
           if (map.getLayer(LINE_LAYER_ID)) map.removeLayer(LINE_LAYER_ID);
+          if (map.getLayer(FLOOD_HATCH_LAYER_ID)) map.removeLayer(FLOOD_HATCH_LAYER_ID);
           if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
           if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
           layersAddedRef.current = false;
@@ -98,6 +101,24 @@ export function HazardMapOverlay({ map, hazardData, enabled }) {
     }
 
     const geojson = getFilteredGeoJSON();
+
+    // Ensure the SVG pattern is loaded for flood hatching
+    if (!map.hasImage('flood-hatch')) {
+      const svg = `
+        <svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+          <line x1="-2" y1="14" x2="14" y2="-2" stroke="#0284c7" stroke-width="2.5" stroke-opacity="0.85"/>
+        </svg>
+      `;
+      const img = new Image();
+      img.onload = () => {
+        if (!map.hasImage('flood-hatch')) {
+          map.addImage('flood-hatch', img);
+          // Trigger a style update so the pattern renders if the layer is already added
+          map.triggerRepaint();
+        }
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
 
     // If source already exists, update its data
     const existingSource = map.getSource(SOURCE_ID);
@@ -136,6 +157,21 @@ export function HazardMapOverlay({ map, hazardData, enabled }) {
           'LOW', 0.32,
           0.3,
         ],
+      },
+    });
+
+    // Flood hatching layer — applies only to flood hazards
+    map.addLayer({
+      id: FLOOD_HATCH_LAYER_ID,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['any', 
+        ['in', 'flood', ['downcase', ['get', 'primary_threat']]],
+        ['in', 'water', ['downcase', ['get', 'primary_threat']]]
+      ],
+      paint: {
+        'fill-pattern': 'flood-hatch',
+        'fill-opacity': 1.0,
       },
     });
 

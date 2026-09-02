@@ -15,6 +15,7 @@
  */
 import { useEffect, useRef, useMemo } from 'react';
 import * as maplibregl from 'maplibre-gl';
+import * as turf from '@turf/turf';
 
 // Route segment source/layer ID prefixes (kept distinct from FleetRouteViewer)
 const SEG_SOURCE_PREFIX  = 'hrc-seg-source-';
@@ -55,15 +56,12 @@ function pointInRing(point, ring) {
 
 function pointInGeometry(point, geometry) {
   if (!geometry) return false;
-  if (geometry.type === 'Polygon') {
-    return geometry.coordinates.some(ring => pointInRing(point, ring));
+  try {
+    const pt = turf.point(point);
+    return turf.booleanIntersects(pt, geometry);
+  } catch (e) {
+    return false;
   }
-  if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.some(poly =>
-      poly.some(ring => pointInRing(point, ring))
-    );
-  }
-  return false;
 }
 
 const SEVERITY_ORDER = { CRITICAL: 3, HIGH: 2, MODERATE: 1, LOW: 0 };
@@ -352,6 +350,9 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
             <div style="color: #bbb; font-size: 11px; margin-top: 2px;">
               ${detailText}
             </div>
+            <div style="color: rgba(255,255,255,0.4); font-size: 10px; margin-top: 5px; font-family: monospace;">
+              ${e.lngLat.lat.toFixed(5)}, ${e.lngLat.lng.toFixed(5)}
+            </div>
           </div>
         `;
 
@@ -359,6 +360,7 @@ export function HazardRouteColorizer({ map, fleetData, hazardData, selectedTripI
           closeButton: false,
           closeOnClick: false,
           offset: 10,
+          anchor: 'bottom',
           className: 'hazard-hover-popup', // reuse the glassmorphic styling
         })
           .setLngLat(e.lngLat)

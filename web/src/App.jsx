@@ -201,6 +201,7 @@ function App() {
             incidents={incidents}
             onIncidentFlyTo={handleFlyTo}
             mapCenter={mapInstance ? mapInstance.getCenter() : null}
+            hazardData={hazardData}
           />
 
           {/* CENTER: Full map with 3D perspective */}

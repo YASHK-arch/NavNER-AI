@@ -25,8 +25,8 @@ const BYPASS_LAYER_PREFIX  = 'frv-bypass-layer-';
 const FLOW_DOT_COUNT = 14;
 
 // Colors
-const ORIG_COLOR        = '#3b82f6'; // blue — original path
-const ORIG_CASING_COLOR = '#1d4ed8';
+const ORIG_COLOR        = '#eab308'; // yellow — original path base
+const ORIG_CASING_COLOR = '#a16207';
 const DETOUR_COLOR        = '#10b981'; // green — active AI detour
 const DETOUR_CASING_COLOR = '#065f46';
 
@@ -75,6 +75,7 @@ function createFlowMarker(index, total, opacity) {
   element.className = 'bypass-route-flow-marker bypass-route-flow-marker--green';
   element.style.setProperty('--bypass-flow-delay', `${-(index / total) * 1.3}s`);
   element.style.opacity = String(opacity);
+
   const dot = document.createElement('span');
   dot.className = 'bypass-route-flow-dot bypass-route-flow-dot--green';
   element.appendChild(dot);
@@ -135,9 +136,9 @@ export function FleetRouteViewer({ map, fleetData, selectedTripId }) {
 
         // Opacity scale — selected: full / unselected: 74% / other-selected: 18%
         const detourOpacity = dimmed ? 0.18 : (isSelected ? 1.0 : 0.74);
-        const origOpacity   = dimmed ? 0.08 : (isSelected ? 0.45 : 0.32);
+        const origOpacity   = dimmed ? 0.15 : (isSelected ? 0.45 : 0.25);
 
-        // ── Layer 1: Original (abandoned) route — faded blue ─────────────────
+        // ── Layer 1: Original (abandoned) route — faded yellow ─────────────────
         const origCoords = trip.original_route?.coordinates;
         if (origCoords?.length >= 2) {
           const srcId    = `${ORIG_SOURCE_PREFIX}${tripKey}`;
@@ -167,7 +168,7 @@ export function FleetRouteViewer({ map, fleetData, selectedTripId }) {
           });
           layerIds.add(casingId);
 
-          // Faded blue dashed line — communicates "abandoned path"
+          // Faded red dashed line — communicates "abandoned path"
           map.addLayer({
             id: layerId, type: 'line', source: srcId,
             paint: {
@@ -265,6 +266,9 @@ export function FleetRouteViewer({ map, fleetData, selectedTripId }) {
             <div style="color: #bbb; font-size: 11px; margin-top: 2px;">
               ${isBypass ? 'Active rerouted path' : 'Abandoned route'}
             </div>
+            <div style="color: rgba(255,255,255,0.4); font-size: 10px; margin-top: 5px; font-family: monospace;">
+              ${e.lngLat.lat.toFixed(5)}, ${e.lngLat.lng.toFixed(5)}
+            </div>
           </div>
         `;
 
@@ -272,6 +276,7 @@ export function FleetRouteViewer({ map, fleetData, selectedTripId }) {
           closeButton: false,
           closeOnClick: false,
           offset: 10,
+          anchor: 'top',
           className: 'hazard-hover-popup', // reuse the glassmorphic styling
         })
           .setLngLat(e.lngLat)

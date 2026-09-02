@@ -459,3 +459,37 @@ async def get_fleet_status_explanation(trip_id: str):
     
     return {"trip_id": trip_id, "explanation": explanation}
 
+
+# ── Endpoint 4: AI Dynamic Route Alternatives (Groq Integration) ──────────────
+
+@router.get("/trip/{trip_id}/alternatives")
+async def get_trip_alternatives(trip_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Uses the Groq API (Qwen model) to generate dynamic, realistic route 
+    alternatives based on the trip's origin, destination, and current conditions.
+    """
+    from app.services.llm_routing import generate_alternative_routes
+    
+    # Fetch trip details
+    stmt = select(VehicleTrip).where(VehicleTrip.trip_id == trip_id)
+    trip = (await db.execute(stmt)).scalar_one_or_none()
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+        
+    origin = trip.origin_name or "Unknown Origin"
+    dest = trip.dest_name or "Unknown Destination"
+    commodity = trip.commodity_type.value if trip.commodity_type else "General Supplies"
+    
+    # For now, hardcode the blockage reason based on the dashboard context,
+    # or infer it from the status.
+    blockage_reason = "a severe landslide blocking the primary highway"
+    
+    alternatives = await generate_alternative_routes(
+        origin_name=origin,
+        dest_name=dest,
+        commodity=commodity,
+        blockage_reason=blockage_reason
+    )
+    
+    return {"trip_id": trip_id, "alternatives": alternatives}

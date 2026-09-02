@@ -56,11 +56,15 @@ NER_GRID_CELLS = [
     {"lat": 25.6751, "lng": 91.5860, "state": "Meghalaya", "district": "Ri-Bhoi",
      "slope": 28.5, "elevation": 900, "susceptibility": 0.65},
 
-    # Imphal corridor (Manipur)
-    {"lat": 24.8170, "lng": 93.9368, "state": "Manipur", "district": "Imphal West",
-     "slope": 12.3, "elevation": 786, "susceptibility": 0.35},
+    # Imphal Valley (Manipur)
+    {"lat": 24.8170, "lng": 93.9368, "state": "Manipur", "district": "Imphal West Landslide",
+     "slope": 5.0, "elevation": 786, "susceptibility": 0.35, "resolution": 9},
     {"lat": 24.7500, "lng": 93.8800, "state": "Manipur", "district": "Bishnupur",
      "slope": 6.8, "elevation": 780, "susceptibility": 0.25},
+
+    # Kamrup Metropolitan (Guwahati) - Simulated small landslide hex
+    {"lat": 26.1445, "lng": 91.7362, "state": "Assam", "district": "Kamrup Metropolitan Landslide",
+     "slope": 5.2, "elevation": 55, "susceptibility": 0.15, "resolution": 9},
 
     # Dibrugarh corridor (Assam)
     {"lat": 27.4728, "lng": 94.9120, "state": "Assam", "district": "Dibrugarh",
@@ -105,6 +109,10 @@ NER_GRID_CELLS = [
      "slope": 34.0, "elevation": 1280, "susceptibility": 0.75},
     {"lat": 25.4500, "lng": 91.6500, "state": "Meghalaya", "district": "East Khasi Hills",
      "slope": 30.0, "elevation": 1100, "susceptibility": 0.68},
+
+    # Majuli simulated fake flood block
+    {"lat": 26.89999, "lng": 94.16430, "state": "Assam", "district": "Majuli",
+     "slope": 1.0, "elevation": 80, "susceptibility": 0.95},
 ]
 
 # Initial risk assessments (varying levels for demo).
@@ -116,10 +124,12 @@ NER_GRID_CELLS = [
 # HIGH), so the first evaluation silently rewrote the map.
 INITIAL_RISK_DATA = {
     # (landslide_score, flood_score, factor)
-    "Kamrup Metropolitan": (0.12, 0.25, "Normal conditions — low terrain risk"),
+    "Kamrup Metropolitan": (0.55, 0.25, "Soil inconsistencies and possible disruptions"),
+    "Kamrup Metropolitan Landslide": (0.95, 0.25, "Major landslide simulation blocking main route"),
     "East Khasi Hills": (0.78, 0.35, "Heavy precipitation on steep slope (35°)"),
     "Ri-Bhoi": (0.62, 0.30, "Elevated landslide conditions (slope 28°, rain 80mm)"),
-    "Imphal West": (0.30, 0.22, "Normal conditions — moderate terrain"),
+    "Imphal West": (0.55, 0.22, "Soil inconsistencies and possible disruptions"),
+    "Imphal West Landslide": (0.95, 0.22, "Major landslide simulation blocking main route"),
     "Bishnupur": (0.20, 0.18, "Normal conditions — low terrain risk"),
     "Dibrugarh": (0.08, 0.45, "Waterlogging risk (rainfall 25mm/hr, low drainage)"),
     "Tinsukia": (0.10, 0.40, "Waterlogging risk (rainfall 20mm/hr, low drainage)"),
@@ -130,6 +140,7 @@ INITIAL_RISK_DATA = {
     "East Sikkim": (0.92, 0.28, "Heavy precipitation on steep slope (42°)"),
     "West Tripura": (0.06, 0.15, "Normal conditions — flat terrain"),
     "Cachar": (0.18, 0.52, "Sustained flooding — Barak Valley low elevation"),
+    "Majuli": (0.10, 0.98, "Total blockade simulated by fake flood alert"),
 }
 
 
@@ -392,8 +403,9 @@ async def seed_demo_data(db: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
 
     for cell_info in NER_GRID_CELLS:
-        # Get H3 index for this coordinate at resolution 7
-        h3_index = h3.latlng_to_cell(cell_info["lat"], cell_info["lng"], 7)
+        # Get H3 index for this coordinate at dynamic resolution (default 7)
+        res = cell_info.get("resolution", 7)
+        h3_index = h3.latlng_to_cell(cell_info["lat"], cell_info["lng"], res)
 
         # Convert H3 boundary to WKT polygon
         wkt = _h3_boundary_to_wkt(h3_index)

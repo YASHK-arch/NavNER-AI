@@ -4,6 +4,7 @@
  * Incident feed embedded below
  */
 import { useState, useMemo } from 'react';
+import * as turf from '@turf/turf';
 import { ReportIncidentModal } from './ReportIncidentModal';
 
 const COMMODITY_ICONS = {
@@ -35,6 +36,25 @@ function timeAgo(dateStr) {
   return `${Math.floor(mins / 60)}h ago`;
 }
 
+function pointInRing(point, ring) {
+  const [px, py] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeometry(point, geometry) {
+  if (!geometry) return false;
+  if (geometry.type === 'Polygon') return geometry.coordinates.some(ring => pointInRing(point, ring));
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.some(poly => poly.some(ring => pointInRing(point, ring)));
+  return false;
+}
+
 export function FleetSideDrawer({
   fleetData,
   loading,
@@ -43,10 +63,13 @@ export function FleetSideDrawer({
   incidents = [],
   onIncidentFlyTo,
   mapCenter,
+  hazardData,
 }) {
   const [search, setSearch] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+
+  const hazardFeatures = useMemo(() => hazardData?.features ?? [], [hazardData]);
 
   const sortedTrips = useMemo(() => {
     if (!fleetData?.active_trips) return [];
@@ -137,10 +160,40 @@ export function FleetSideDrawer({
         )}
 
         {sortedTrips.map((trip) => {
-          const prio = PRIORITY_CONFIG[trip.priority_level] || PRIORITY_CONFIG.STANDARD;
           const isSelected = trip.trip_id === selectedTripId;
           const isRerouted = trip.status === 'REROUTED';
           const commodityIcon = COMMODITY_ICONS[trip.commodity_type] || '📦';
+          
+          let badgeLabel = 'On The Way';
+          let badgeClass = 'tag-standard';
+          
+          if (isRerouted) {
+             badgeLabel = 'Rerouted';
+             badgeClass = 'rerouted';
+          } else {
+             const isEssential = trip.priority_level === 'EMERGENCY' || trip.priority_level === 'HIGH_PRIORITY';
+             let isBlocked = false;
+             
+             if (isEssential && trip.current_route?.coordinates?.length >= 2) {
+               try {
+                 const routeFeature = turf.lineString(trip.current_route.coordinates);
+                 isBlocked = hazardFeatures.some(f => {
+                   if (['CRITICAL', 'HIGH'].includes(f.properties?.risk_level)) {
+                     // Check if the route LineString intersects the hazard Polygon
+                     return turf.booleanIntersects(routeFeature, f);
+                   }
+                   return false;
+                 });
+               } catch (e) {
+                 console.error("Error checking route intersection", e);
+               }
+             }
+             
+             if (isBlocked) {
+               badgeLabel = 'Emergency';
+               badgeClass = 'tag-emergency';
+             }
+          }
 
           let etaTime = '—';
           let etaDate = '';
@@ -180,8 +233,8 @@ export function FleetSideDrawer({
                     {trip.origin_name?.split(',')[0] || 'Origin'} → {trip.dest_name?.split(',')[0] || 'Destination'}
                   </div>
                 </div>
-                <span className={`logistics-status-badge ${isRerouted ? 'rerouted' : prio.class}`}>
-                  {isRerouted ? 'Rerouted' : prio.label}
+                <span className={`logistics-status-badge ${badgeClass}`}>
+                  {badgeLabel}
                 </span>
               </div>
 

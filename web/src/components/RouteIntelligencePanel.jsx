@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
  * RouteIntelligencePanel — Uber-style smart route suggestions
@@ -88,35 +88,30 @@ export function RouteIntelligencePanel({ trip, onAccept, onIgnore, onHalt }) {
 
   const currentDelay = trip.delay_minutes || 0;
 
-  const alternatives = [
-    {
-      id: 'route_a',
-      quality: 'OPTIMAL',
-      label: 'Via NH-37 Bypass',
-      extraTime: -5,
-      distance: 242,
-      hazardScore: 0.18,
-      description: 'Longer but avoids landslide zone. NH-37 clear.',
-    },
-    {
-      id: 'route_b',
-      quality: 'ALTERNATE',
-      label: 'Mountain Pass Route',
-      extraTime: 28,
-      distance: 318,
-      hazardScore: 0.42,
-      description: 'Partial cloud/visibility issues. Drive cautiously.',
-    },
-    {
-      id: 'route_c',
-      quality: 'LAST_RESORT',
-      label: 'Airstrip Relay + Road',
-      extraTime: 90,
-      distance: 180,
-      hazardScore: 0.65,
-      description: 'Emergency relay via Lilabari airstrip. High cost.',
-    },
-  ];
+  const [alternatives, setAlternatives] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!trip?.trip_id) return;
+    
+    let isMounted = true;
+    setLoading(true);
+    
+    fetch(`http://localhost:8000/api/v1/routing/trip/${trip.trip_id}/alternatives`)
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted && data.alternatives) {
+          setAlternatives(data.alternatives);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching LLM alternatives:", err);
+        if (isMounted) setLoading(false);
+      });
+      
+    return () => { isMounted = false; };
+  }, [trip?.trip_id]);
 
   return (
     <div 
@@ -198,8 +193,17 @@ export function RouteIntelligencePanel({ trip, onAccept, onIgnore, onHalt }) {
       <div className="ri-section-label">Smart Route Options</div>
 
       <div className="ri-routes-list">
-        {alternatives.map((alt, i) => {
-          const quality = ROUTE_QUALITY[alt.quality];
+        {loading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>
+            <div className="loading-spinner" style={{ display: 'inline-block', width: '24px', height: '24px', marginBottom: '8px' }}></div>
+            <div>NavNER.ai is analyzing safe alternatives...</div>
+          </div>
+        ) : alternatives.length === 0 ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>
+            No alternatives found.
+          </div>
+        ) : alternatives.map((alt, i) => {
+          const quality = ROUTE_QUALITY[alt.quality] || ROUTE_QUALITY.ALTERNATE;
           const timeDelta = alt.extraTime;
           const timeStr = timeDelta > 0 ? `+${timeDelta}m` : `${Math.abs(timeDelta)}m faster`;
           const timeColor = timeDelta <= 0 ? '#22c55e' : timeDelta < 30 ? '#f59e0b' : '#ef4444';

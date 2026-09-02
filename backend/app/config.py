@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://localhost:8081"
     SNS_TOPIC_ARN: str | None = None
+    GROQ_API_KEY: str | None = None
 
     # ── Fleet-Manager database (issue #74 follow-up) ───────────────────────
     # Deliberately a second, separate database rather than a schema in the
