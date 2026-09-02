@@ -28,7 +28,14 @@ from app.websocket import manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create database tables, seed demo data, and start scheduler on startup."""
+    from sqlalchemy import text
     async with engine.begin() as conn:
+        try:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+            print("✅ PostGIS extension verified.")
+        except Exception as e:
+            print("⚠️ Could not create PostGIS extension (it may already exist):", e)
+            
         await conn.run_sync(Base.metadata.create_all)
     print("✅ Database tables created.")
 
