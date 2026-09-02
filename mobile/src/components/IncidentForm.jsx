@@ -41,14 +41,80 @@ export function IncidentForm({
   location,
   onLocationChange,
   onUseLiveGps,
+  stateName,
+  onStateNameChange,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
+
+  const STATES = [
+    { label: 'Assam', value: 'Assam' },
+    { label: 'Meghalaya', value: 'Meghalaya' },
+    { label: 'Manipur', value: 'Manipur' },
+    { label: 'Nagaland', value: 'Nagaland' },
+    { label: 'Arunachal Pradesh', value: 'Arunachal Pradesh' },
+    { label: 'Tripura', value: 'Tripura' },
+    { label: 'Mizoram', value: 'Mizoram' },
+  ];
 
   const selectedLabel =
     INCIDENT_TYPES.find(t => t.value === incidentType)?.label || 'Select Incident Type';
+  const selectedStateLabel =
+    STATES.find(s => s.value === stateName)?.label || 'Select State';
 
   return (
     <View style={styles.container}>
+
+      {/* ── State Selector Dropdown ── */}
+      <Text style={styles.label}>State Region</Text>
+      <TouchableOpacity
+        style={styles.dropdown}
+        onPress={() => setStateDropdownOpen(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.dropdownText, !stateName && styles.placeholder]}>
+          {selectedStateLabel}
+        </Text>
+        <Text style={styles.chevron}>▾</Text>
+      </TouchableOpacity>
+
+      <Modal visible={stateDropdownOpen} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setStateDropdownOpen(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select State</Text>
+            <FlatList
+              data={STATES}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.modalItem, stateName === item.value && styles.modalItemActive]}
+                  onPress={() => {
+                    onStateNameChange(item.value);
+                    setStateDropdownOpen(false);
+                  }}
+                >
+                  <Text style={[styles.modalItemText, stateName === item.value && styles.modalItemTextActive]}>
+                    {item.label}
+                  </Text>
+                  {stateName === item.value && <Text style={styles.checkmark}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Assam Conditional Container ── */}
+      {stateName === 'Assam' && (
+        <View style={{ backgroundColor: 'rgba(255,91,34,0.1)', padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,91,34,0.3)' }}>
+          <Text style={{ color: '#FF5B22', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>📌 Assam Regional Department</Text>
+          <Text style={{ color: '#aaa', fontSize: 11 }}>Incident reports will be routed to the Assam State Disaster Management Authority (ASDMA) and Guwahati Traffic Command.</Text>
+        </View>
+      )}
 
       {/* ── Incident Type Dropdown ── */}
       <Text style={styles.label}>Incident Type</Text>

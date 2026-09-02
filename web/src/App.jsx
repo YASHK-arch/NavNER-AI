@@ -32,6 +32,7 @@ function App() {
   const [riskUpdate, setRiskUpdate] = useState(null);
   const [selectedTripId, setSelectedTripId] = useState(null);
   const [activeView, setActiveView] = useState('map'); // 'map' | 'analytics'
+  const [driverSmsToast, setDriverSmsToast] = useState(null);
 
   // Fetch hazard data for the heatmap overlay
   const { hazardData, refetch: refetchHazard } = useHazardMap({ enabled: true });
@@ -89,6 +90,11 @@ function App() {
       case 'fleet_update': {
         refetchFleet();
         refetchMap();
+        break;
+      }
+      case 'driver_sms_alert': {
+        setDriverSmsToast(message.data);
+        setTimeout(() => setDriverSmsToast(null), 8000);
         break;
       }
       default:
@@ -177,6 +183,25 @@ function App() {
 
   return (
     <div className="app-layout">
+      {driverSmsToast && (
+        <div style={{
+          position: 'absolute', bottom: 30, left: 20, background: '#1c1c1e', border: '1px solid #333', 
+          padding: 16, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 9999,
+          color: 'white', maxWidth: 360, animation: 'slideInBottom 0.3s ease-out', borderLeft: '4px solid #22c55e'
+        }}>
+          <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 'bold', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+            <span>📱 AUTOMATED SMS DISPATCH</span>
+            <span style={{color: '#888'}}>Just now</span>
+          </div>
+          <div style={{ fontSize: 14, fontFamily: 'monospace', color: '#ccc', marginBottom: 6 }}>
+            To: {driverSmsToast.phone}
+          </div>
+          <div style={{ fontSize: 13, lineHeight: '1.4' }}>
+            {driverSmsToast.message}
+          </div>
+        </div>
+      )}
+
       <Header
         vehicleCount={vehicles.length}
         incidentCount={incidents.length}

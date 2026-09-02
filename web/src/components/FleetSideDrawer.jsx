@@ -4,8 +4,10 @@
  * Incident feed embedded below
  */
 import { useState, useMemo } from 'react';
-import * as turf from '@turf/turf';
+
+import AddShipmentModal from './AddShipmentModal';
 import { ReportIncidentModal } from './ReportIncidentModal';
+import * as turf from '@turf/turf';
 
 const COMMODITY_ICONS = {
   MEDICINE: '💊',
@@ -66,6 +68,7 @@ export function FleetSideDrawer({
   hazardData,
 }) {
   const [search, setSearch] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
@@ -139,9 +142,19 @@ export function FleetSideDrawer({
       </div>
 
       {/* Add Shipment Button */}
-      <button className="fleet-add-btn" id="fleet-add-btn">
+      <button className="fleet-add-btn" id="fleet-add-btn" onClick={() => setIsAddModalOpen(true)}>
         + Add Shipment
       </button>
+
+      <AddShipmentModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        onSubmit={(data) => {
+          console.log('New shipment:', data);
+          // Demo alert (in reality this would hit the API)
+          alert('Shipment ' + data.truckId + ' deployed to ' + data.destination + ' successfully! (Demo)');
+        }}
+      />
 
       {/* Trip Cards */}
       <div className="fleet-drawer-list">

@@ -16,6 +16,7 @@ import {
   StatusBar,
   Alert,
   SafeAreaView,
+  Linking,
 } from 'react-native';
 import { NetworkBadge } from '../components/NetworkBadge';
 import { IncidentForm } from '../components/IncidentForm';
@@ -25,6 +26,7 @@ import { dispatchSatelliteSms, syncPendingSatelliteImages } from '../services/sa
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import NetInfo from '@react-native-community/netinfo';
+import * as SMS from 'expo-sms';
 import { MapView, Marker, PROVIDER_DEFAULT } from '../components/MapView';
 
 export function FieldReportScreen() {
@@ -36,6 +38,7 @@ export function FieldReportScreen() {
   const [severity, setSeverity] = useState('');
   const [description, setDescription] = useState('');
   const [estimatedClearanceHrs, setEstimatedClearanceHrs] = useState('');
+  const [stateName, setStateName] = useState('');
   const [photo, setPhoto] = useState(null);
 
   // UI state
@@ -165,14 +168,15 @@ export function FieldReportScreen() {
 
     if (isOnline) {
       try {
-        // Submits to the real backend — POST /api/v1/incident, the same
-        // endpoint the web dashboard and the map both read from — rather
-        // than the Firebase mocks this replaced (uploadImageToFirebaseStorage
-        // / saveToFirestore never actually left the device).
         await submitIncidentToBackend(report);
         setSubmitted(true);
         snackbarMessage.current = '✅ Report submitted — live on the dashboard!';
         showSnackbar('#22C55E');
+        
+        // Simulation: Send email
+        const emailBody = `Incident: ${incidentType}%0ASeverity: ${severity}%0AState: ${stateName || 'N/A'}%0ALocation: ${location?.lat ?? 26.1445}, ${location?.lng ?? 91.7362}%0ADescription: ${description}`;
+        Linking.openURL(`mailto:yashkumar02006@gmail.com?subject=NavNER Incident Report&body=${emailBody}`).catch(() => console.log('Mailto failed'));
+
         setTimeout(resetForm, 2500);
       } catch (err) {
         Alert.alert('Submission Error', 'Failed to submit. Report saved locally.');
@@ -184,26 +188,23 @@ export function FieldReportScreen() {
         setTimeout(resetForm, 2500);
       }
     } else {
-      // Fully offline. Try the satellite-SMS bridge first (issue #74) — it
-      // gets the hazard onto the dashboard within an SMS's transit time
-      // rather than whenever this phone next sees a signal, which in the
-      // scenario this exists for could be hours. If SMS genuinely is not
-      // available (no SIM, a simulator), fall back to the ordinary queue so
-      // the report is not lost either way.
-      try {
-        const { incidentId, smsResult } = await dispatchSatelliteSms(report);
+      // Hackathon Video Demo Hook
+      const stateCode = stateName ? stateName.substring(0, 3).toUpperCase() : 'UNK';
+      const typeCode = incidentType ? incidentType.substring(0, 3).toUpperCase() : 'UNK';
+      const sevCode = severity ? severity.charAt(0).toUpperCase() : 'U';
+      const lat = (location?.lat ?? 26.14).toFixed(2);
+      const lng = (location?.lng ?? 91.73).toFixed(2);
+      
+      const compressedPayload = `NNER|INC-88|${typeCode}|${sevCode}|${stateCode}|${lat}|${lng}|${description}`;
+      const isAvailable = await SMS.isAvailableAsync();
+      
+      if (isAvailable) {
+        await SMS.sendSMSAsync(['+919755045490'], compressedPayload);
         setSavedToQueue(true);
-        snackbarMessage.current =
-          smsResult === 'sent'
-            ? `📡 ${incidentId} sent via satellite SMS. Photo queued for sync.`
-            : `📦 ${incidentId} saved locally. Photo queued — SMS was not sent.`;
-        showSnackbar(smsResult === 'sent' ? '#22C55E' : '#FBBF24');
-      } catch (err) {
-        await enqueue(report);
-        await updateQueueCount();
-        setSavedToQueue(true);
-        snackbarMessage.current = '📦 Report Queued. Will sync when online.';
-        showSnackbar();
+        snackbarMessage.current = '📡 Fake SMS dispatched for video demo!';
+        showSnackbar('#22C55E');
+      } else {
+        Alert.alert("Error", "SMS simulator not available.");
       }
       setTimeout(resetForm, 2500);
     }
@@ -273,6 +274,8 @@ export function FieldReportScreen() {
           location={location}
           onLocationChange={setLocation}
           onUseLiveGps={fetchLiveGps}
+          stateName={stateName}
+          onStateNameChange={setStateName}
         />
 
         {/* Mini-Map for visual confirmation (Issue #77) */}
@@ -322,30 +325,30 @@ export function FieldReportScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
 
-      {/* Submit Button */}
-      <View style={styles.submitArea}>
-        <TouchableOpacity
-          style={[
-            styles.submitBtn,
-            submitDisabled && !submitted && !savedToQueue && styles.submitBtnDisabled,
-            submitted && styles.submitBtnSuccess,
-            savedToQueue && styles.submitBtnQueued,
-          ]}
-          onPress={handleSubmit}
-          disabled={submitDisabled}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Submit incident report"
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitBtnText}>{getSubmitLabel()}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {/* Submit Button */}
+        <View style={styles.submitArea}>
+          <TouchableOpacity
+            style={[
+              styles.submitBtn,
+              submitDisabled && !submitted && !savedToQueue && styles.submitBtnDisabled,
+              submitted && styles.submitBtnSuccess,
+              savedToQueue && styles.submitBtnQueued,
+            ]}
+            onPress={handleSubmit}
+            disabled={submitDisabled}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Submit incident report"
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitBtnText}>{getSubmitLabel()}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       {/* Snackbar Toast */}
       <Animated.View
@@ -444,15 +447,8 @@ const styles = StyleSheet.create({
   },
   // Submit Button
   submitArea: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    marginTop: 20,
     backgroundColor: 'rgba(28,28,28,0.97)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
   },
   submitBtn: {
     backgroundColor: '#FF5B22',

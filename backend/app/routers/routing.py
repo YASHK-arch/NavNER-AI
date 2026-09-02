@@ -159,6 +159,7 @@ async def recalculate_trip_route(
     trip_id: str | uuid.UUID,
     avoid_hazards: bool,
     db: AsyncSession,
+    ai_reasoning: str | None = None,
 ) -> RouteCalculateResponse:
     """Core logic to fetch trip, rebuild graph, calculate optimal path, and notify."""
     # 1. Fetch the trip
@@ -275,10 +276,15 @@ async def recalculate_trip_route(
         # 10.5 Dispatch Reroute Alert
         from app.alert_dispatcher import alert_dispatcher
         import asyncio
+        
+        msg = f"Vehicle {trip.vehicle_id} rerouted. Delay: {delay_min} mins."
+        if ai_reasoning:
+            msg += f" AI Rationale: {ai_reasoning}"
+            
         asyncio.create_task(alert_dispatcher.process_event({
             "event_type": "IMMEDIATE_REROUTE",
             "severity": "CRITICAL",
-            "message": f"Vehicle {trip.vehicle_id} rerouted. Delay: {delay_min} mins.",
+            "message": msg,
             "trip_id": str(trip.trip_id),
             "vehicle_id": str(trip.vehicle_id),
             "source": "routing_engine",

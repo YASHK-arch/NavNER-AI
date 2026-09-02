@@ -2570,6 +2570,28 @@ input[type="range"]::-webkit-slider-thumb {
 
 .ri-route-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
 .ri-route-time { font-size: 14px; font-weight: 700; font-family: monospace; }
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .ri-route-description { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5; }
 
 .ri-route-meta {
@@ -2911,3 +2933,8 @@ input[type="range"]::-webkit-slider-thumb {
 .hazard-hover-popup .maplibregl-popup-tip {
   border-top-color: rgba(20, 20, 20, 0.85) !important;
 }
+
+
+/* Mapbox Popup Overrides */
+.mapboxgl-popup-content { background: transparent; padding: 0; box-shadow: none; border: none; }
+.mapboxgl-popup-tip { display: none; }

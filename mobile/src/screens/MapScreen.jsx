@@ -20,6 +20,7 @@ import {
 import { MapView, Marker, Polyline, PROVIDER_DEFAULT } from '../components/MapView';
 import { TruckMarker } from '../components/TruckMarker';
 import BottomSheet from '../components/BottomSheet';
+import { AddShipmentModal } from '../components/AddShipmentModal';
 import { useFleetTracking } from '../hooks/useFleetTracking';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -27,9 +28,25 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 export function MapScreen() {
   const [selectedTruck, setSelectedTruck] = useState(null);
   const [rerouteAccepted, setRerouteAccepted] = useState({});
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [aiAlternatives, setAiAlternatives] = useState(null);
+  const [fetchingAi, setFetchingAi] = useState(false);
   const mapRef = useRef(null);
   const bottomSheetRef = useRef(null);
   const { trucks, loading, error } = useFleetTracking();
+
+  const fetchAiAlternatives = async (tripId) => {
+    setFetchingAi(true);
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${API_URL}/api/v1/routing/trip/${tripId}/alternatives`);
+      const data = await res.json();
+      setAiAlternatives(data.alternatives || []);
+    } catch (err) {
+      alert('Failed to fetch AI routes: ' + err.message);
+    }
+    setFetchingAi(false);
+  };
 
   // selectedTruck is a snapshot taken on tap; refresh it from the latest poll
   // so the bottom sheet does not freeze on stale ETA/delay after a 5s tick.
@@ -39,6 +56,7 @@ export function MapScreen() {
 
   const handleTruckPress = useCallback((truck) => {
     setSelectedTruck(truck);
+    setAiAlternatives(null);
     // Animate map camera to truck
     if (mapRef.current) {
       mapRef.current.animateToRegion(
@@ -124,12 +142,12 @@ export function MapScreen() {
             Together they mirror the professional logistics control-tower
             visualization described in the feature request. */}
 
-        {/* Layer 1 — Original route (faded blue dashed) */}
+        {/* Layer 1 — Original route (abandoned, amber/yellow dashed) */}
         {liveSelectedTruck?.rerouted && liveSelectedTruck.originalRoute && (
           <Polyline
             coordinates={liveSelectedTruck.originalRoute}
-            strokeColor="rgba(59,130,246,0.40)"
-            strokeWidth={3}
+            strokeColor="#eab308"
+            strokeWidth={4}
             lineDashPattern={[8, 5]}
           />
         )}
@@ -234,21 +252,61 @@ export function MapScreen() {
 
               {/* Accept Reroute CTA */}
               {liveSelectedTruck.rerouted && (
-                <TouchableOpacity
-                  style={[
-                    styles.rerouteBtn,
-                    rerouteAccepted[liveSelectedTruck.id] && styles.rerouteBtnAccepted,
-                  ]}
-                  onPress={() => handleAcceptReroute(liveSelectedTruck.id)}
-                  disabled={!!rerouteAccepted[liveSelectedTruck.id]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.rerouteBtnText}>
-                    {rerouteAccepted[liveSelectedTruck.id]
-                      ? '✓ Reroute Accepted'
-                      : '🔄 Accept AI Reroute'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ marginTop: 16 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.rerouteBtn,
+                      rerouteAccepted[liveSelectedTruck.id] && styles.rerouteBtnAccepted,
+                      { marginBottom: aiAlternatives ? 12 : 0 }
+                    ]}
+                    onPress={() => {
+                      if (!rerouteAccepted[liveSelectedTruck.id]) {
+                        if (!aiAlternatives) {
+                          fetchAiAlternatives(liveSelectedTruck.id);
+                        } else {
+                          handleAcceptReroute(liveSelectedTruck.id);
+                        }
+                      }
+                    }}
+                    disabled={!!rerouteAccepted[liveSelectedTruck.id] || fetchingAi}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.rerouteBtnText}>
+                      {rerouteAccepted[liveSelectedTruck.id]
+                        ? '✓ Reroute Accepted'
+                        : fetchingAi 
+                          ? 'NavNER.ai is analyzing...' 
+                          : aiAlternatives 
+                            ? '✓ Accept Selected AI Route' 
+                            : '🧠 View AI Alternatives'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {aiAlternatives && aiAlternatives.map((alt, idx) => (
+                    <View key={idx} style={{ 
+                      backgroundColor: '#2a2a2d', 
+                      padding: 14, 
+                      borderRadius: 12, 
+                      marginBottom: 10, 
+                      borderWidth: 1, 
+                      borderColor: idx === 0 ? '#10b981' : '#3f3f46' 
+                    }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>
+                          Option {idx + 1} {idx === 0 && <Text style={{ color: '#10b981', fontSize: 12 }}> (Recommended)</Text>}
+                        </Text>
+                        <Text style={{ color: '#10b981', fontWeight: 'bold' }}>{Math.round(alt.estimated_duration / 60)}h</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#9ca3af', fontSize: 12 }}>Cost: ${Math.round(alt.estimated_cost)}</Text>
+                        <Text style={{ color: '#f59e0b', fontSize: 12 }}>Risk: {alt.risk_score}/100</Text>
+                      </View>
+                      <Text style={{ color: '#d1d5db', fontSize: 12, lineHeight: 18, fontStyle: 'italic' }}>
+                        {alt.reasoning}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
           ) : (
@@ -287,6 +345,19 @@ export function MapScreen() {
           )}
         </ScrollView>
       </BottomSheet>
+
+      <TouchableOpacity style={styles.fab} onPress={() => setIsAddModalOpen(true)}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
+      <AddShipmentModal 
+        visible={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)}
+        onSubmit={(data) => {
+          console.log('New shipment from mobile:', data);
+          alert('Shipment ' + data.truckId + ' deployed to ' + data.destination + ' successfully! (Demo)');
+        }}
+      />
     </View>
   );
 }
@@ -464,4 +535,28 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F97316',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 100,
+  },
+  fabText: {
+    fontSize: 32,
+    color: '#FFF',
+    fontWeight: '400',
+    marginTop: -4,
+  },
 });
+

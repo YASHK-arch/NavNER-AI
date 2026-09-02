@@ -50,7 +50,40 @@ async def trigger_incident_reroute(incident: Incident, db: AsyncSession) -> None
     # 4. Recalculate routes
     for trip in affected_trips:
         try:
-            await recalculate_trip_route(trip.trip_id, avoid_hazards=True, db=db)
+            # 4a. Consult Groq for routing intelligence rationale
+            from app.services.llm_routing import generate_alternative_routes
+            commodity = trip.commodity_type.value if trip.commodity_type else "GENERAL"
+            
+            # Include incident description as part of the context for Groq
+            blockage_reason = f"a {incident.type.value} incident"
+            if incident.description:
+                blockage_reason += f" (Context: {incident.description})"
+                
+            alts = await generate_alternative_routes(
+                origin_name=trip.origin_name,
+                dest_name=trip.dest_name,
+                commodity=commodity,
+                blockage_reason=blockage_reason
+            )
+            
+            best_alt = alts[0] if alts else None
+            ai_reasoning = f"{best_alt['label']}: {best_alt['description']}" if best_alt else None
+            
+            # 4b. Mathematically recalculate the spatial path and save the AI rationale
+            await recalculate_trip_route(trip.trip_id, avoid_hazards=True, db=db, ai_reasoning=ai_reasoning)
+            
+            # 4c. Broadcast SMS dispatch simulation to frontend
+            from app.websocket import manager
+            await manager.broadcast({
+                "event": "driver_sms_alert",
+                "data": {
+                    "trip_id": trip.trip_id,
+                    "vehicle_id": trip.vehicle_id,
+                    "phone": "+91-9755045490",
+                    "message": f"NavNER ALERT: Route updated due to {incident.type.value}. AI Guidance: {best_alt['label'] if best_alt else 'Detour applied'}."
+                }
+            })
+            logger.info("[SMS Gateway] Dispatched reroute SMS for trip %s to municipality user.", trip.trip_id)
         except Exception as e:
             logger.error("[Reroute Trigger] Failed to recalculate route for trip %s: %s", trip.trip_id, e)
 

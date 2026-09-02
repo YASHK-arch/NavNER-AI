@@ -1,9 +1,47 @@
 /**
  * Header component with branding, live stats, fleet status, view tabs, and WebSocket status.
  */
+import { useState } from 'react';
+
 export function Header({ vehicleCount, incidentCount, isConnected, fleetData, activeView, onViewChange }) {
+  const [showSmsToast, setShowSmsToast] = useState(false);
+
+  const simulateSMS = async () => {
+    setShowSmsToast(true);
+    setTimeout(() => setShowSmsToast(false), 5000);
+    
+    try {
+      await fetch('http://localhost:8000/api/v1/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'landslide',
+          severity: 'Critical',
+          description: 'Severe Landslide (Via Satellite SMS)',
+          lat: 26.1445,
+          lng: 91.7362,
+        })
+      });
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   return (
     <header className="header">
+      {showSmsToast && (
+        <div style={{
+          position: 'absolute', top: 60, right: 20, background: '#1c1c1e', border: '1px solid #333', 
+          padding: 16, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 9999,
+          color: 'white', maxWidth: 320, animation: 'slideIn 0.3s ease-out'
+        }}>
+          <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 'bold', marginBottom: 4 }}>📡 SATELLITE GATEWAY</div>
+          <div style={{ fontSize: 14, fontFamily: 'monospace', color: '#ccc' }}>
+            NNER|INC-88|LND|C|26.14|91.73|Severe Landslide
+          </div>
+        </div>
+      )}
+
       <div className="header-brand">
         <img src="/favicon.svg" alt="NavNER-AI" style={{ width: 36, height: 36 }} />
         <div>
@@ -12,8 +50,14 @@ export function Header({ vehicleCount, incidentCount, isConnected, fleetData, ac
         </div>
       </div>
 
-      {/* Stage 4: View tab switcher */}
       <div className="header-tabs">
+        <button
+          className="header-tab"
+          style={{ background: '#ff5b22', color: '#fff', borderColor: '#ff5b22', marginRight: 16 }}
+          onClick={simulateSMS}
+        >
+          📡 Simulate SMS 
+        </button>
         <button
           className={`header-tab ${activeView === 'map' ? 'active' : ''}`}
           onClick={() => onViewChange?.('map')}

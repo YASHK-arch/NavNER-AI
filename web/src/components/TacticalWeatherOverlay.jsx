@@ -204,7 +204,7 @@ export function TacticalWeatherOverlay({ map, weatherZones = MOCK_ZONES }) {
         popupRef.current
           .setLngLat(e.lngLat)
           .setHTML(`
-            <div style="padding: 8px; font-family: system-ui, sans-serif;">
+            <div style="padding: 10px; font-family: system-ui, sans-serif; background: rgba(20, 20, 20, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.6); backdrop-filter: blur(4px);">
               <strong style="color: ${props.color}; font-size: 14px; display: block; margin-bottom: 4px; text-transform: uppercase;">
                 ⚠️ ${props.hazardType} HAZARD
               </strong>
