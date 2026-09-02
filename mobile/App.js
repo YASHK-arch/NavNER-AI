@@ -1,46 +1,58 @@
-/**
- * NER Logistics Field App — Root Entry
- * Issue #36: Multi-tab navigation shell with FloatingNavBar.
- * Tabs: Map | Analytics | Report Incident
- */
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+// Screens
+import { SplashScreen } from './src/screens/SplashScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
 import { SetupScreen } from './src/screens/SetupScreen';
-import { SuppliesScreen } from './src/screens/SuppliesScreen';
+import { HomeScreen } from './src/screens/HomeScreen';
 import { FieldReportScreen } from './src/screens/FieldReportScreen';
+import { SuppliesScreen } from './src/screens/SuppliesScreen';
+import { MapScreen } from './src/screens/MapScreen';
+import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { FloatingNavBar } from './src/components/FloatingNavBar';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('setup');
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
+function MainTabs() {
   return (
     <View style={styles.root}>
-      {/* Screens — keep all mounted to preserve state */}
-      <View style={[styles.screen, activeTab !== 'setup' && styles.hidden]}>
-        <SetupScreen />
-      </View>
-      <View style={[styles.screen, activeTab !== 'report' && styles.hidden]}>
-        <FieldReportScreen />
-      </View>
-      <View style={[styles.screen, activeTab !== 'supplies' && styles.hidden]}>
-        <SuppliesScreen />
-      </View>
-
-      {/* Floating Bottom Nav Bar — rendered above all screens */}
-      <FloatingNavBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Tab.Navigator
+        tabBar={(props) => <FloatingNavBar {...props} />}
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Tab.Screen name="Home" component={HomeScreen} />
+        <Tab.Screen name="Map" component={MapScreen} />
+        <Tab.Screen name="Report" component={FieldReportScreen} />
+        <Tab.Screen name="Supplies" component={SuppliesScreen} />
+        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+      </Tab.Navigator>
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
+        <Stack.Screen name="Splash" component={SplashScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Setup" component={SetupScreen} />
+        <Stack.Screen name="MainTabs" component={MainTabs} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#1C1C1C',
-  },
-  screen: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  hidden: {
-    display: 'none',
+    backgroundColor: '#0F0F0F',
   },
 });

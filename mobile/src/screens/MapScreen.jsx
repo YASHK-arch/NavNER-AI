@@ -17,7 +17,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import { MapView, Marker, Polyline, PROVIDER_DEFAULT } from '../components/MapView';
 import { TruckMarker } from '../components/TruckMarker';
 import BottomSheet from '../components/BottomSheet';
 import { useFleetTracking } from '../hooks/useFleetTracking';
