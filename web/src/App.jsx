@@ -27,7 +27,7 @@ import { useFleetStatus } from './hooks/useFleetStatus';
 import { useOSRMRoutes } from './hooks/useOSRMRoutes';
 
 function App() {
-  const { vehicles, setVehicles, incidents, setIncidents, loading, error } = useMapState();
+  const { vehicles, setVehicles, incidents, setIncidents, loading, error, refetch: refetchMap } = useMapState();
   const [mapInstance, setMapInstance] = useState(null);
   const [riskUpdate, setRiskUpdate] = useState(null);
   const [selectedTripId, setSelectedTripId] = useState(null);
@@ -88,12 +88,13 @@ function App() {
       }
       case 'fleet_update': {
         refetchFleet();
+        refetchMap();
         break;
       }
       default:
         console.log('[App] Unknown WS event:', message.event);
     }
-  }, [setVehicles, setIncidents, refetchHazard, handleRerouteAlert, refetchFleet]);
+  }, [setVehicles, setIncidents, refetchHazard, handleRerouteAlert, refetchFleet, refetchMap]);
 
   const { isConnected } = useWebSocket(handleWsMessage);
 

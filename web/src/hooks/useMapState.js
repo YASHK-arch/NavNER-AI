@@ -40,5 +40,17 @@ export function useMapState() {
     return () => { cancelled = true; };
   }, []);
 
-  return { vehicles, setVehicles, incidents, setIncidents, loading, error };
+  const refetch = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/map-state`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      setVehicles(data.vehicles || []);
+      setIncidents(data.incidents || []);
+    } catch (err) {
+      console.error('[MapState] Refetch error:', err);
+    }
+  };
+
+  return { vehicles, setVehicles, incidents, setIncidents, loading, error, refetch };
 }
