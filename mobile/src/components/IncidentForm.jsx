@@ -39,6 +39,8 @@ export function IncidentForm({
   estimatedClearanceHrs,
   onEtcChange,
   location,
+  onLocationChange,
+  onUseLiveGps,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -161,15 +163,36 @@ export function IncidentForm({
       />
 
       {/* ── Geo-Tag Display ── */}
-      <Text style={styles.label}>Geo-Tag</Text>
-      <View style={styles.geoTag}>
-        <Text style={styles.geoIcon}>📍</Text>
-        <Text style={styles.geoCoords}>
-          {location
-            ? `${location.lat.toFixed(5)}°N, ${location.lng.toFixed(5)}°E`
-            : 'Fetching precise location...'}
-        </Text>
-        {location && <View style={styles.geoLiveDot} />}
+      <Text style={styles.label}>Geo-Tag (Location)</Text>
+      <View style={styles.geoContainer}>
+        <TouchableOpacity style={styles.liveGpsBtn} onPress={onUseLiveGps}>
+          <Text style={styles.liveGpsBtnText}>📍 Use Live GPS</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.manualCoordsRow}>
+          <View style={styles.coordInputWrapper}>
+            <Text style={styles.coordLabel}>Manual Latitude</Text>
+            <TextInput
+              style={styles.coordInput}
+              placeholder="e.g. 26.1445"
+              placeholderTextColor="#6B7280"
+              keyboardType="numeric"
+              value={location ? String(location.lat) : ''}
+              onChangeText={(val) => onLocationChange({ ...location, lat: parseFloat(val) || 0 })}
+            />
+          </View>
+          <View style={styles.coordInputWrapper}>
+            <Text style={styles.coordLabel}>Manual Longitude</Text>
+            <TextInput
+              style={styles.coordInput}
+              placeholder="e.g. 91.7362"
+              placeholderTextColor="#6B7280"
+              keyboardType="numeric"
+              value={location ? String(location.lng) : ''}
+              onChangeText={(val) => onLocationChange({ ...location, lng: parseFloat(val) || 0 })}
+            />
+          </View>
+        </View>
       </View>
 
     </View>
@@ -260,33 +283,45 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  // Geo-Tag
-  geoTag: {
-    flexDirection: 'row',
+  // Geo-Tag Container
+  geoContainer: {
+    gap: 12,
+  },
+  liveGpsBtn: {
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.4)',
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
-    gap: 8,
+  },
+  liveGpsBtnText: {
+    color: '#22C55E',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  manualCoordsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  coordInputWrapper: {
+    flex: 1,
+    gap: 6,
+  },
+  coordLabel: {
+    fontSize: 10,
+    color: '#6B7280',
+    textTransform: 'uppercase',
+  },
+  coordInput: {
     backgroundColor: '#1C1C1C',
     borderWidth: 1,
     borderColor: '#3F3F46',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  geoIcon: {
-    fontSize: 16,
-  },
-  geoCoords: {
-    flex: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#FFFFFF',
     fontSize: 13,
-    color: '#9CA3AF',
-    fontFamily: 'monospace',
-    fontWeight: '500',
-  },
-  geoLiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22C55E',
   },
   // Modal
   modalOverlay: {

@@ -5,25 +5,25 @@
  */
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { MapScreen } from './src/screens/MapScreen';
-import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
+import { SetupScreen } from './src/screens/SetupScreen';
+import { SuppliesScreen } from './src/screens/SuppliesScreen';
 import { FieldReportScreen } from './src/screens/FieldReportScreen';
 import { FloatingNavBar } from './src/components/FloatingNavBar';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('map');
+  const [activeTab, setActiveTab] = useState('setup');
 
   return (
     <View style={styles.root}>
       {/* Screens — keep all mounted to preserve state */}
-      <View style={[styles.screen, activeTab !== 'map' && styles.hidden]}>
-        <MapScreen />
-      </View>
-      <View style={[styles.screen, activeTab !== 'analytics' && styles.hidden]}>
-        <AnalyticsScreen />
+      <View style={[styles.screen, activeTab !== 'setup' && styles.hidden]}>
+        <SetupScreen />
       </View>
       <View style={[styles.screen, activeTab !== 'report' && styles.hidden]}>
         <FieldReportScreen />
+      </View>
+      <View style={[styles.screen, activeTab !== 'supplies' && styles.hidden]}>
+        <SuppliesScreen />
       </View>
 
       {/* Floating Bottom Nav Bar — rendered above all screens */}

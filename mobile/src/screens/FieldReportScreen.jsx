@@ -21,11 +21,11 @@ import { NetworkBadge } from '../components/NetworkBadge';
 import { IncidentForm } from '../components/IncidentForm';
 import { PhotoCapture } from '../components/PhotoCapture';
 import { enqueue, syncQueue, getQueue, getCachedMapState } from '../services/syncQueue';
-import { submitIncidentToBackend } from '../services/incidentApi';
 import { dispatchSatelliteSms, syncPendingSatelliteImages } from '../services/satelliteSms';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import NetInfo from '@react-native-community/netinfo';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 
 export function FieldReportScreen() {
   const [isOnline, setIsOnline] = useState(true);
@@ -81,24 +81,30 @@ export function FieldReportScreen() {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Allow location access to geo-tag incidents.');
+        // Just fail silently or warn, we have manual inputs now.
         return;
       }
-      try {
-        let currentLoc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-        setLocation({
-          lat: currentLoc.coords.latitude,
-          lng: currentLoc.coords.longitude,
-        });
-      } catch (err) {
-        console.warn('Failed to get location', err);
-      }
+      fetchLiveGps();
     })();
 
     return () => unsubscribe();
   }, []);
+
+  const fetchLiveGps = async () => {
+    try {
+      let currentLoc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      setLocation({
+        lat: currentLoc.coords.latitude,
+        lng: currentLoc.coords.longitude,
+      });
+      snackbarMessage.current = '📍 Location updated from GPS';
+      showSnackbar('#22C55E');
+    } catch (err) {
+      Alert.alert('GPS Error', 'Failed to fetch location. Please enter manually.');
+    }
+  };
 
   const updateQueueCount = async () => {
     const queue = await getQueue();
@@ -254,7 +260,7 @@ export function FieldReportScreen() {
           </View>
         )}
 
-        {/* Incident Form (Issue #36 redesign) */}
+        {/* Incident Form (Issue #36 redesign / Issue #77 manual location) */}
         <IncidentForm
           incidentType={incidentType}
           onTypeChange={setIncidentType}
@@ -265,7 +271,37 @@ export function FieldReportScreen() {
           estimatedClearanceHrs={estimatedClearanceHrs}
           onEtcChange={setEstimatedClearanceHrs}
           location={location}
+          onLocationChange={setLocation}
+          onUseLiveGps={fetchLiveGps}
         />
+
+        {/* Mini-Map for visual confirmation (Issue #77) */}
+        {location && (
+          <View style={styles.miniMapContainer}>
+            <MapView
+              style={styles.miniMap}
+              provider={PROVIDER_DEFAULT}
+              initialRegion={{
+                latitude: location.lat,
+                longitude: location.lng,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              region={{
+                latitude: location.lat,
+                longitude: location.lng,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+            >
+              <Marker coordinate={{ latitude: location.lat, longitude: location.lng }} />
+            </MapView>
+          </View>
+        )}
 
         {/* Photo Capture */}
         <PhotoCapture photo={photo} onCapture={handleCapture} />
@@ -393,6 +429,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FBBF24',
     fontWeight: '600',
+  },
+  // Mini Map
+  miniMapContainer: {
+    height: 140,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+  },
+  miniMap: {
+    ...StyleSheet.absoluteFillObject,
   },
   // Submit Button
   submitArea: {
