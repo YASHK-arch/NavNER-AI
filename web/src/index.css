@@ -381,22 +381,64 @@ button { cursor: pointer; }
 .logistics-trip-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
+  border-left: 3px solid transparent;
   border-radius: var(--r-xl);
   padding: 14px 16px;
   cursor: pointer;
-  transition: all var(--t-normal);
+  transition:
+    background var(--t-normal),
+    border-color var(--t-normal),
+    box-shadow var(--t-normal),
+    transform 120ms ease;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Subtle shimmer overlay on hover for a "pressable" depth effect */
+.logistics-trip-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(249,115,22,0.06) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity var(--t-normal);
+  pointer-events: none;
 }
 
 .logistics-trip-card:hover {
-  border-color: rgba(249, 115, 22, 0.3);
+  border-color: var(--border);
+  border-left-color: rgba(249, 115, 22, 0.7);
   background: var(--bg-card-hover);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(249,115,22,0.08);
+  transform: translateY(-1px);
+}
+
+.logistics-trip-card:hover::before {
+  opacity: 1;
+}
+
+.logistics-trip-card:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.3);
 }
 
 .logistics-trip-card.selected {
-  background: var(--orange);
-  border-color: var(--orange-dark);
-  box-shadow: var(--shadow-orange);
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  border-color: #c2410c;
+  border-left-color: #ffffff;
+  box-shadow:
+    0 6px 24px rgba(249, 115, 22, 0.45),
+    0 2px 8px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+  transform: translateY(-1px);
+}
+
+/* Kill the shimmer on selected — the gradient itself is the statement */
+.logistics-trip-card.selected::before {
+  opacity: 0;
 }
 
 /* Card header row */
@@ -425,7 +467,6 @@ button { cursor: pointer; }
   letter-spacing: -0.3px;
 }
 
-.logistics-trip-card.selected .logistics-card-id { color: white; }
 
 /* Status badges */
 .logistics-status-badge {
@@ -444,9 +485,17 @@ button { cursor: pointer; }
 .rerouted      { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
 
 /* Selected card overrides */
-.logistics-trip-card.selected .logistics-status-badge.tag-standard { background: rgba(0,0,0,0.2); color: white; }
-.logistics-trip-card.selected .logistics-status-badge.tag-high { background: rgba(0,0,0,0.2); color: white; }
-.logistics-trip-card.selected .logistics-status-badge.rerouted { background: rgba(0,0,0,0.2); color: white; }
+.logistics-trip-card.selected .logistics-card-id {
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.logistics-trip-card.selected .logistics-card-icon {
+  background: rgba(0,0,0,0.2);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+}
+.logistics-trip-card.selected .logistics-status-badge { background: rgba(0,0,0,0.22); color: rgba(255,255,255,0.95); }
+.logistics-trip-card.selected .logistics-status-badge.tag-emergency { background: rgba(239,68,68,0.35); color: white; animation: none; }
+
 
 /* Divider */
 .logistics-card-divider {

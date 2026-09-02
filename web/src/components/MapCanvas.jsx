@@ -76,7 +76,7 @@ function createTruckSVG(color = '#f97316') {
   </svg>`;
 }
 
-export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, onVehicleClick, selectedTripVehicle, selectedTripRoute, fleetData }) {
+export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, onVehicleClick, selectedTripVehicle, selectedTripRoute, selectedTripId, fleetData }) {
   const mapContainer = useRef(null);
   const mapRef       = useRef(null);
   const vehicleMarkersRef  = useRef({});
@@ -277,42 +277,51 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
   }, [incidents, onIncidentClick]);
 
   // ── Frame selected trip route, else fly to its vehicle ──────────
+  //
+  // selectedTripId is the stable primitive that changes whenever the user clicks
+  // a different vehicle card. Using it as the primary dependency ensures the map
+  // transitions every single time — even if the vehicle object reference hasn't
+  // changed (e.g. a telemetry update resets the reference between two clicks on
+  // the same sidebar card).
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !selectedTripId) return;
 
-    // A selected trip with geometry is framed on its route, then floored to a
-    // road-legible zoom so the corridor it follows is actually visible.
+    // If the selected trip has route geometry, frame it so the full corridor is
+    // visible at a road-legible zoom level.
     if (selectedTripRoute?.length > 1) {
       const bounds = routeBounds(selectedTripRoute);
-      const framed = map.cameraForBounds(bounds, { padding: 50 });
+      const framed = map.cameraForBounds(bounds, { padding: 60 });
 
       if (framed) {
         map.easeTo({
           center: framed.center,
           zoom: Math.max(framed.zoom, ROUTE_VIEW_MIN_ZOOM),
-          duration: 1400,
+          pitch: 0,
+          bearing: 0,
+          duration: 1200,
           essential: true,
         });
       } else {
-        map.fitBounds(bounds, { padding: 50, duration: 1400, essential: true });
+        map.fitBounds(bounds, { padding: 60, duration: 1200, essential: true });
       }
       return;
     }
 
+    // No route geometry — fly directly to the vehicle's current GPS position.
     const v = selectedTripVehicle;
     if (!v || v.lat == null || v.lng == null) return;
 
-    // Smooth camera fly to street-level 3D view — Uber style
     map.easeTo({
       center: [v.lng, v.lat],
-      zoom: 12,
-      pitch: 55,
-      bearing: -20,
-      duration: 1400,
-      easing: t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+      zoom: 13,
+      pitch: 0,
+      bearing: 0,
+      duration: 1200,
+      essential: true,
     });
-  }, [selectedTripVehicle, selectedTripRoute]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTripId]); // ← stable primitive; vehicle/route refs intentionally omitted
 
   // ── Expose flyTo externally ─────────────────────────────────────
   useEffect(() => {
