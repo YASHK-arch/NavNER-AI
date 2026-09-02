@@ -207,6 +207,7 @@ function App() {
               onIncidentClick={(incident) => handleFlyTo(incident.lng, incident.lat)}
               onMapReady={handleMapReady}
               onVehicleClick={handleVehicleClick}
+              selectedTripId={selectedTripId}
               selectedTripVehicle={selectedTripVehicle}
               selectedTripRoute={selectedTripRoute}
               fleetData={fleetData}

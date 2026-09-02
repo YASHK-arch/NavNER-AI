@@ -19,7 +19,9 @@
           "photosPermission": "Allow NER Logistics to access your photos for incident documentation.",
           "cameraPermission": "Allow NER Logistics to use your camera to capture incident photos."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin",
+      "expo-web-browser"
     ],
     "ios": {
       "supportsTablet": true,

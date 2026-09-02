@@ -1,37 +1,48 @@
-/**
- * Pill-shaped floating bottom navigation bar.
- * Three tabs: Map | Analytics | Report Incident.
- * Orange active accent, dark glassmorphism card.
- */
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 
 const TABS = [
-  { key: 'setup', icon: '⚙️', label: 'Setup' },
-  { key: 'report', icon: '📸', label: 'Report' },
-  { key: 'supplies', icon: '📦', label: 'Supplies' },
+  { name: 'Home',      icon: '🏠', label: 'Home' },
+  { name: 'Map',       icon: '🗺️', label: 'Map' },
+  { name: 'Report',    icon: '📸', label: 'Report' },
+  { name: 'Supplies',  icon: '📦', label: 'Supplies' },
+  { name: 'Analytics', icon: '📊', label: 'Analytics' },
 ];
 
-export function FloatingNavBar({ activeTab, onTabChange }) {
+export function FloatingNavBar({ state, descriptors, navigation }) {
   return (
     <View style={styles.wrapper}>
       <View style={styles.pill}>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
+        {state.routes.map((route, index) => {
+          const tabInfo = TABS.find(t => t.name === route.name) || { icon: '●', label: route.name };
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
           return (
             <TouchableOpacity
-              key={tab.key}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => onTabChange(tab.key)}
-              activeOpacity={0.7}
+              key={route.key}
+              style={[styles.tab, isFocused && styles.tabActive]}
+              onPress={onPress}
+              activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: isActive }}
+              accessibilityState={{ selected: isFocused }}
             >
-              <Text style={styles.tabIcon}>{tab.icon}</Text>
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                {tab.label}
+              <Text style={[styles.tabIcon, isFocused && styles.tabIconActive]}>
+                {tabInfo.icon}
               </Text>
+              {isFocused && (
+                <Text style={styles.tabLabel}>{tabInfo.label}</Text>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -43,26 +54,27 @@ export function FloatingNavBar({ activeTab, onTabChange }) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 36 : 24,
-    left: 24,
-    right: 24,
+    bottom: Platform.OS === 'ios' ? 32 : 20,
+    left: 20,
+    right: 20,
     alignItems: 'center',
     zIndex: 100,
   },
   pill: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(28, 28, 28, 0.96)',
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 18, 18, 0.97)',
     borderRadius: 40,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    gap: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 20,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255,255,255,0.08)',
     width: '100%',
   },
   tab: {
@@ -71,27 +83,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 32,
-    gap: 6,
+    gap: 5,
+    minHeight: 44,
   },
   tabActive: {
+    flex: 2,
     backgroundColor: '#FF5B22',
     shadowColor: '#FF5B22',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
   },
   tabIcon: {
-    fontSize: 16,
+    fontSize: 18,
+    opacity: 0.5,
+  },
+  tabIconActive: {
+    opacity: 1,
+    fontSize: 18,
   },
   tabLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  tabLabelActive: {
+    fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
 });

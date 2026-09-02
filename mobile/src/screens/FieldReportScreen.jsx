@@ -25,7 +25,7 @@ import { dispatchSatelliteSms, syncPendingSatelliteImages } from '../services/sa
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import NetInfo from '@react-native-community/netinfo';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { MapView, Marker, PROVIDER_DEFAULT } from '../components/MapView';
 
 export function FieldReportScreen() {
   const [isOnline, setIsOnline] = useState(true);

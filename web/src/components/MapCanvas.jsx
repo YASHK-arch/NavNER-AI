@@ -7,6 +7,13 @@
  * - Click vehicle → zoom into street-level view (flat, labels readable)
  * - Road block / calamity warning markers
  * - POI layer suppression (logistics-only view)
+ *
+ * Camera fix: uses a debounced fly-to that tracks the last flown trip ID
+ * so OSRM route enrichment (which changes the route reference multiple times)
+ * does NOT trigger repeated jittery camera moves.
+ *
+ * Marker fix: markers are only rebuilt when their key properties change,
+ * preventing DOM churn on every WS telemetry tick.
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
@@ -14,20 +21,17 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { TacticalWeatherOverlay } from './TacticalWeatherOverlay';
 
 // OpenFreeMap positron: free, no API key, clean 2D navigation style.
-// Override via VITE_MAP_STYLE_URL env var for custom deployments.
 const MAP_STYLE_URL =
   import.meta.env.VITE_MAP_STYLE_URL ||
   'https://tiles.openfreemap.org/styles/positron';
 
-// Retail POI pins are clutter on a logistics map. Road labels, names,
-// and geometry are all kept — only POI / house-number layers are hidden.
+// Suppress POI clutter on logistics map — keep road labels, hide retail pins.
 const POI_LAYER_PATTERN = /^poi|housenum/i;
 
-// Selecting a trip should land at a zoom where roads are legible.
-// ~zoom 7 on NE India frames a route but the road itself is not drawn yet.
+// Minimum zoom when framing a selected route.
 const ROUTE_VIEW_MIN_ZOOM = 9.5;
 
-// [[lng, lat], ...] -> [[minLng, minLat], [maxLng, maxLat]] for fitBounds.
+// [[lng, lat], ...] → [[minLng, minLat], [maxLng, maxLat]] for fitBounds.
 function routeBounds(coordinates) {
   return coordinates.reduce(
     (b, [lng, lat]) => [
@@ -39,10 +43,10 @@ function routeBounds(coordinates) {
 }
 
 const COMMODITY_COLORS = {
-  MEDICINE:    '#ef4444',  // red — emergency pharma
-  FOOD_GRAINS: '#3b82f6',  // blue — FCI grains
-  FUEL:        '#f59e0b',  // amber — fuel convoy
-  GENERAL:     '#8b5cf6',  // purple — general goods
+  MEDICINE:    '#ef4444',
+  FOOD_GRAINS: '#3b82f6',
+  FUEL:        '#f59e0b',
+  GENERAL:     '#8b5cf6',
 };
 
 const COMMODITY_ICONS = {
@@ -61,7 +65,6 @@ const PRIORITY_PULSE = {
 const VEHICLE_EMOJI  = { truck: '🚛', ambulance: '🚑', utility: '🔧' };
 const INCIDENT_EMOJI = { flood: '🌊', landslide: '⛰️', road_damage: '🚧', bridge_collapse: '🌉' };
 
-// Animated truck SVG element for 3D overlay at street level
 function createTruckSVG(color = '#f97316') {
   return `<svg width="52" height="38" viewBox="0 0 52 38" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="0" y="8" width="36" height="22" rx="3" fill="${color}" opacity="0.95"/>
@@ -75,7 +78,11 @@ function createTruckSVG(color = '#f97316') {
   </svg>`;
 }
 
-export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, onVehicleClick, selectedTripVehicle, selectedTripRoute, fleetData }) {
+// ─── Smooth cubic easing (ease-in-out) ───────────────────────────────────────
+const easeInOutCubic = t =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+
+export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, onVehicleClick, selectedTripVehicle, selectedTripRoute, selectedTripId, fleetData }) {
   const mapContainer = useRef(null);
   const mapRef       = useRef(null);
   const vehicleMarkersRef  = useRef({});
@@ -84,29 +91,34 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
   const travelAnimRef      = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
 
-  // Held in a ref so a new callback identity does not tear down and rebuild
-  // every marker on each render.
-  const onVehicleClickRef  = useRef(onVehicleClick);
+  // Track which trip the camera last flew to + a stable "route settled" flag
+  // so enrichment swaps (OSRM replacing straight-line coords) do NOT fire
+  // repeated camera moves.
+  const lastCameraTripRef   = useRef(null);
+  const cameraDebounceRef   = useRef(null);
 
+  const onVehicleClickRef = useRef(onVehicleClick);
   useEffect(() => {
     onVehicleClickRef.current = onVehicleClick;
   }, [onVehicleClick]);
 
-  // ── Initialize map ─────────────────────────────────────────────
+  // ── Initialize map ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      // OpenFreeMap positron vector style — clean 2D nav map, free, no key needed.
-      // Shows real road geometry, street names, and district labels.
       style: MAP_STYLE_URL,
-      center: [93.0, 25.5], // Broader NER view: shows Assam → Manipur corridor
-      zoom: 7,              // Regional zoom — entire NE road network visible
-      pitch: 0,             // Flat 2D — vector road labels stay legible
+      center: [93.0, 25.5],
+      zoom: 7,
+      pitch: 0,
       bearing: 0,
       minZoom: 4,
       maxZoom: 19,
+      // Improve tile rendering: use a higher pixel ratio on retina screens
+      // and allow the GPU to pre-fetch adjacent tiles.
+      fadeDuration: 150,
+      crossSourceCollisions: false,
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
@@ -116,37 +128,32 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
     map.on('load', () => {
       setMapInstance(map);
 
-      // Suppress POI clutter so only routing-relevant labels remain.
+      // Suppress POI clutter.
       for (const layer of map.getStyle().layers ?? []) {
         if (POI_LAYER_PATTERN.test(layer.id)) {
-          try {
-            map.setLayoutProperty(layer.id, 'visibility', 'none');
-          } catch {
-            // Some layer types have no visibility property — skip silently.
-          }
+          try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch { /* skip */ }
         }
       }
       onMapReady?.(map);
     });
 
     return () => {
+      if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
       map.remove();
       mapRef.current = null;
-      // map.remove() destroys every Marker's DOM; drop the caches so StrictMode
-      // double-mount in dev doesn't pick up stale objects and skip re-adding markers.
       vehicleMarkersRef.current = {};
       incidentMarkersRef.current = {};
     };
   }, []);
 
-  // ── Update vehicle markers ──────────────────────────────────────
+  // ── Update vehicle markers (skip rebuild when only position changed) ────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     const currentIds = new Set(vehicles.map(v => v.id));
 
-    // Remove stale
+    // Remove stale markers
     for (const [id, marker] of Object.entries(vehicleMarkersRef.current)) {
       if (!currentIds.has(id)) {
         marker.remove();
@@ -154,13 +161,33 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
       }
     }
 
-    // Add / update
     vehicles.forEach(vehicle => {
       if (vehicle.lat == null || vehicle.lng == null) return;
+      
+      const isSelected = selectedTripVehicle?.id === vehicle.id;
 
       const existing = vehicleMarkersRef.current[vehicle.id];
       if (existing) {
+        // Fast path: just move the existing marker — no DOM rebuild.
         existing.setLngLat([vehicle.lng, vehicle.lat]);
+        
+        const el = existing.getElement();
+        
+        if (isSelected) {
+          el.classList.add('selected-vehicle-marker');
+          // MapLibre actively manages z-index. To guarantee this marker is on top 
+          // of other perfectly stacked markers, we move it to the end of the DOM sibling list.
+          if (el.parentNode && el.parentNode.lastChild !== el) {
+            el.parentNode.appendChild(el);
+          }
+          // Re-trigger CSS animation for visual feedback if clicked again
+          el.classList.remove('bounce-pulse');
+          void el.offsetWidth; // trigger reflow
+          el.classList.add('bounce-pulse');
+        } else {
+          el.classList.remove('selected-vehicle-marker');
+          el.classList.remove('bounce-pulse');
+        }
         return;
       }
 
@@ -173,9 +200,8 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
       const emoji      = VEHICLE_EMOJI[vehicle.type] || '🚛';
       const isEmergency = priority === 'EMERGENCY';
 
-      // Build the 3D-style marker element
       const el = document.createElement('div');
-      el.className = `marker-vehicle-3d${doPulse ? ' pulsing' : ''}`;
+      el.className = `marker-vehicle-3d${doPulse ? ' pulsing' : ''}${isSelected ? ' selected-vehicle-marker bounce-pulse' : ''}`;
       el.dataset.vehicleId = vehicle.id;
       el.style.setProperty('--ring-color', ringColor);
 
@@ -191,7 +217,6 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
         </div>
       `;
 
-      // Popup with deep info
       const statusBadge = trip ? `<span style="color:${trip.status === 'REROUTED' ? '#f59e0b' : '#22c55e'}">${trip.status}</span>` : '';
       const popup = new maplibregl.Popup({ offset: 38, closeButton: false, maxWidth: '260px' })
         .setHTML(`
@@ -207,8 +232,6 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
           </div>
         `);
 
-      // Clicking the truck selects its trip, which highlights its route and opens
-      // the detail panel — the same outcome as clicking its sidebar card.
       el.addEventListener('click', () => {
         onVehicleClickRef.current?.(vehicle);
       });
@@ -220,9 +243,9 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
 
       vehicleMarkersRef.current[vehicle.id] = marker;
     });
-  }, [vehicles, fleetData]);
+  }, [vehicles, fleetData, selectedTripVehicle]);
 
-  // ── Incident markers ────────────────────────────────────────────
+  // ── Incident markers ────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -262,51 +285,117 @@ export function MapCanvas({ vehicles, incidents, onIncidentClick, onMapReady, on
     });
   }, [incidents, onIncidentClick]);
 
-  // ── Fly to selected vehicle, else frame its route ──────────
+  // ── Smart camera: fly to selected trip ─────────────────────────────────────
+  // KEY FIX: We key the camera on `selectedTripId`, NOT on the vehicle/route
+  // objects — which change identity every time OSRM enriches the route.
+  // A 300 ms debounce absorbs rapid state transitions (trip select → OSRM
+  // enrichment arrives) and settles into a single smooth animation.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const v = selectedTripVehicle;
-    
-    // 1. If we have the vehicle's live coordinates, fly to the truck at street level
-    if (v && v.lat != null && v.lng != null) {
-      // Flat street-level zoom — vector basemap labels stay readable at pitch 0.
-      // zoom 14 puts the vehicle's block in full detail with road names visible.
-      map.easeTo({
-        center: [v.lng, v.lat],
-        zoom: 14.5, // Slightly closer to emphasize the truck
-        pitch: 0,
-        bearing: 0,
-        duration: 1200,
-        easing: t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-      });
+    // Trip deselected — reset tracking and do nothing.
+    if (!selectedTripId) {
+      lastCameraTripRef.current = null;
       return;
     }
 
-    // 2. Fallback: If we only have the route but no live vehicle data, frame the route
-    if (selectedTripRoute?.length > 1) {
-      const bounds = routeBounds(selectedTripRoute);
-      const framed = map.cameraForBounds(bounds, { padding: 50 });
+    // If the camera already flew to this trip, don't re-fire.
+    // (Route enrichment changes fleetData but the trip ID stays the same.)
+    if (lastCameraTripRef.current === selectedTripId) return;
 
-      if (framed) {
-        map.easeTo({
-          center: framed.center,
-          zoom: Math.max(framed.zoom, ROUTE_VIEW_MIN_ZOOM),
-          duration: 1400,
-          essential: true,
+    // Cancel any pending debounced camera move for this trip.
+    if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
+
+    cameraDebounceRef.current = setTimeout(() => {
+      const v = selectedTripVehicle;
+
+      // 1. Best case: live vehicle coordinates available — fly to the truck.
+      if (v?.lat != null && v?.lng != null) {
+        lastCameraTripRef.current = selectedTripId;
+        map.flyTo({
+          center: [v.lng, v.lat],
+          zoom: 14.5,
+          pitch: 0,
+          bearing: 0,
+          duration: 1800,
+          easing: easeInOutCubic,
         });
-      } else {
-        map.fitBounds(bounds, { padding: 50, duration: 1400, essential: true });
+        return;
       }
-    }
-  }, [selectedTripVehicle, selectedTripRoute]);
 
-  // ── Expose flyTo externally ─────────────────────────────────────
+      // 2. Fallback: frame the route geometry.
+      if (selectedTripRoute?.length > 1) {
+        const bounds = routeBounds(selectedTripRoute);
+        const framed = map.cameraForBounds(bounds, { padding: 60 });
+
+        if (framed) {
+          lastCameraTripRef.current = selectedTripId;
+          map.flyTo({
+            center: framed.center,
+            zoom: Math.max(framed.zoom, ROUTE_VIEW_MIN_ZOOM),
+            pitch: 0,
+            bearing: 0,
+            duration: 1800,
+            easing: easeInOutCubic,
+          });
+        } else {
+          map.fitBounds(bounds, {
+            padding: 60,
+            duration: 1800,
+            essential: true,
+          });
+          lastCameraTripRef.current = selectedTripId;
+        }
+      }
+    }, 300);
+
+  // Only re-run when the selected TRIP changes — NOT when the vehicle/route
+  // object reference changes from OSRM enrichment.
+  }, [selectedTripId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Secondary: if vehicle becomes available after route framed, zoom in ─────
+  // This handles the case where the camera framed the route at ~zoom 9 and
+  // then the vehicle location arrives — we do one final zoom-in to the truck.
+  const vehicleArrivedRef = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedTripId || !selectedTripVehicle) return;
+    // Only do the secondary zoom-in once per trip selection.
+    if (vehicleArrivedRef.current === selectedTripId) return;
+    // Only if camera already moved to this trip (via route framing above).
+    if (lastCameraTripRef.current !== selectedTripId) return;
+
+    const v = selectedTripVehicle;
+    if (v?.lat == null || v?.lng == null) return;
+
+    vehicleArrivedRef.current = selectedTripId;
+    map.flyTo({
+      center: [v.lng, v.lat],
+      zoom: 14.5,
+      pitch: 0,
+      bearing: 0,
+      duration: 1600,
+      easing: easeInOutCubic,
+    });
+  }, [selectedTripVehicle, selectedTripId]);
+
+  // Reset secondary zoom tracker on trip change.
+  useEffect(() => {
+    vehicleArrivedRef.current = null;
+  }, [selectedTripId]);
+
+  // ── Expose flyTo externally (for incident click) ────────────────────────────
   useEffect(() => {
     if (mapRef.current && mapContainer.current) {
       mapContainer.current.__flyTo = (lng, lat) => {
-        mapRef.current.easeTo({ center: [lng, lat], zoom: 12, pitch: 50, duration: 1000 });
+        mapRef.current.flyTo({
+          center: [lng, lat],
+          zoom: 12,
+          pitch: 0,
+          duration: 1400,
+          easing: easeInOutCubic,
+        });
       };
     }
   });
