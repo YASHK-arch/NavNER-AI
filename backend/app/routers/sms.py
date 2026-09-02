@@ -148,3 +148,25 @@ async def receive_sms(
     )
 
     return _twiml(f"Report {report.incident_id} received — plotted on NavNER.")
+
+
+# ── Jurisdiction-Based SMS Alerting (Module D Mock) ───────────────────────────
+
+from pydantic import BaseModel
+
+class DispatchAlertRequest(BaseModel):
+    trip_id: str
+    status: str
+    district: str
+
+@router.post("/dispatch-alert")
+async def dispatch_jurisdiction_alert(payload: DispatchAlertRequest):
+    """
+    Mock endpoint to simulate dispatching an SMS alert to a municipal officer 
+    when a truck headed to their jurisdiction is rerouted/delayed.
+    """
+    logger.info(
+        "[SMS OUTBOUND] Dispatching alert to municipal officer in %s for Trip %s (Status: %s)",
+        payload.district, payload.trip_id, payload.status
+    )
+    return {"status": "alert_dispatched", "recipient_district": payload.district}

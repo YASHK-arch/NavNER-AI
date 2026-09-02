@@ -7,9 +7,9 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 
 const TABS = [
-  { key: 'map', icon: '🗺️', label: 'Map' },
-  { key: 'analytics', icon: '📊', label: 'Analytics' },
+  { key: 'setup', icon: '⚙️', label: 'Setup' },
   { key: 'report', icon: '📸', label: 'Report' },
+  { key: 'supplies', icon: '📦', label: 'Supplies' },
 ];
 
 export function FloatingNavBar({ activeTab, onTabChange }) {

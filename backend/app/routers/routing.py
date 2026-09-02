@@ -435,3 +435,27 @@ async def get_fleet_status(db: AsyncSession = Depends(get_db)):
         rerouted_count=rerouted_count,
         emergency_count=emergency_count,
     )
+
+
+# ── Endpoint 3: LLM Status Explanation (Mocked for Hackathon) ─────────────────
+
+@router.get("/fleet-status/{trip_id}/explanation")
+async def get_fleet_status_explanation(trip_id: str):
+    """
+    Mock LLM endpoint that converts raw telemetry/routing JSON into a human-readable explanation.
+    In production, this would pass the trip's data and current hazards to OpenAI/Gemini.
+    """
+    import asyncio
+    # Simulate LLM latency
+    await asyncio.sleep(1.5)
+    
+    explanation = (
+        f"AI Analysis for Trip {trip_id}:\n\n"
+        "This shipment is currently navigating around a high-risk zone (Landslide/Flood reported recently). "
+        "The dynamic routing engine has successfully bypassed the affected road segments. "
+        "The driver has been alerted and is proceeding on a safe detour. "
+        "Estimated delay is within acceptable margins, and no critical shortages are anticipated upon arrival."
+    )
+    
+    return {"trip_id": trip_id, "explanation": explanation}
+
