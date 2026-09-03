@@ -9,6 +9,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 // override this in production (e.g. wss://api.navner.gov.in/ws).
 function getWsUrl() {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+  if (import.meta.env.VITE_API_URL) {
+    const baseUrl = import.meta.env.VITE_API_URL.replace(/\/$/, '');
+    return baseUrl.replace(/^http/, 'ws') + '/ws';
+  }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}/ws`;
 }
