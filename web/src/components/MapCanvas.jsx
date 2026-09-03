@@ -19,6 +19,9 @@ import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { TacticalWeatherOverlay } from './TacticalWeatherOverlay';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+
+maplibregl.setWorkerUrl(workerUrl);
 
 // OpenFreeMap positron: free, no API key, clean 2D navigation style.
 const MAP_STYLE_URL =
