@@ -342,7 +342,12 @@ export function FleetSideDrawer({
                     <span className="fleet-incident-emoji">{INCIDENT_EMOJI[inc.type] || '⚠️'}</span>
                   )}
                   <div className="fleet-incident-info">
-                    <div className="fleet-incident-type">{(inc.type || '').replace(/_/g, ' ')}</div>
+                    <div className="fleet-incident-type" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{(inc.type || '').replace(/_/g, ' ')}</span>
+                      <span style={{ fontSize: '0.75em', color: 'var(--text-muted, #888)', fontWeight: 'normal', whiteSpace: 'nowrap' }}>
+                        ({inc.lat?.toFixed(4)}, {inc.lng?.toFixed(4)}{inc.area ? ` - ${inc.area}` : ''})
+                      </span>
+                    </div>
                     <div className="fleet-incident-time">{timeAgo(inc.created_at)}</div>
                   </div>
                   {imagePending && (
