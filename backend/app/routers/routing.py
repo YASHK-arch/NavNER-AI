@@ -499,3 +499,103 @@ async def get_trip_alternatives(trip_id: str, db: AsyncSession = Depends(get_db)
     )
     
     return {"trip_id": trip_id, "alternatives": alternatives}
+
+
+@router.get("/add-demo-trips")
+async def add_demo_trips(db: AsyncSession = Depends(get_db)):
+    """Generate 8 additional simulated trips for the deployed version."""
+    from app.seed import NER_ROAD_NODES, _build_route_wkt
+    from app.models import Vehicle, VehicleTrip, VehicleType, VehicleStatus, CommodityType, TripPriority, TripStatus
+    from datetime import datetime, timedelta, timezone
+    from geoalchemy2.functions import ST_GeomFromText, ST_MakePoint
+    import random
+
+    now = datetime.now(timezone.utc)
+    
+    # Check if extra trips already exist
+    stmt = select(VehicleTrip.trip_id)
+    existing_count = len((await db.execute(stmt)).all())
+    if existing_count >= 12:
+        return {"status": "already_seeded", "count": existing_count}
+
+    # Fetch existing vehicles to attach trips to
+    v_stmt = select(Vehicle).limit(5)
+    vehicles = (await db.execute(v_stmt)).scalars().all()
+    if not vehicles:
+        return {"status": "error", "message": "No vehicles found to attach trips to."}
+
+    v1, v2, v3, v4, v5 = vehicles[0], vehicles[1 % len(vehicles)], vehicles[2 % len(vehicles)], vehicles[3 % len(vehicles)], vehicles[4 % len(vehicles)]
+
+    new_trips = []
+
+    # 4 REROUTED TRIPS
+    for i in range(4):
+        origins = [4, 5, 10, 1]  # Tezpur, Nagaon, Dimapur, Guwahati
+        dests = [17, 7, 9, 3]    # Lumding, Jorhat, Kohima, Shillong
+        origin_node = NER_ROAD_NODES[origins[i]]
+        dest_node = NER_ROAD_NODES[dests[i]]
+        route_wkt = _build_route_wkt([origins[i], dests[i]])
+        
+        trip = VehicleTrip(
+            vehicle_id=vehicles[i % len(vehicles)].id,
+            origin_name=origin_node["name"],
+            origin_coords=ST_MakePoint(origin_node["lng"], origin_node["lat"]),
+            dest_name=dest_node["name"],
+            dest_coords=ST_MakePoint(dest_node["lng"], dest_node["lat"]),
+            commodity_type=random.choice([CommodityType.GENERAL, CommodityType.FOOD_GRAINS]),
+            priority_level=TripPriority.STANDARD,
+            status=TripStatus.REROUTED,
+            original_route_geom=ST_GeomFromText(route_wkt, 4326),
+            current_active_route=ST_GeomFromText(route_wkt, 4326),
+            estimated_arrival=now + timedelta(hours=random.randint(2, 8)),
+            last_rerouted_at=now - timedelta(minutes=random.randint(15, 60)),
+        )
+        new_trips.append(trip)
+
+    # 3 ON THE WAY TRIPS
+    for i in range(3):
+        origins = [13, 11, 6]  # Agartala, Silchar, Dibrugarh
+        dests = [11, 12, 19]   # Silchar, Aizawl, Tinsukia
+        origin_node = NER_ROAD_NODES[origins[i]]
+        dest_node = NER_ROAD_NODES[dests[i]]
+        route_wkt = _build_route_wkt([origins[i], dests[i]])
+        
+        trip = VehicleTrip(
+            vehicle_id=vehicles[(i+1) % len(vehicles)].id,
+            origin_name=origin_node["name"],
+            origin_coords=ST_MakePoint(origin_node["lng"], origin_node["lat"]),
+            dest_name=dest_node["name"],
+            dest_coords=ST_MakePoint(dest_node["lng"], dest_node["lat"]),
+            commodity_type=random.choice([CommodityType.FUEL, CommodityType.GENERAL]),
+            priority_level=TripPriority.STANDARD,
+            status=TripStatus.IN_TRANSIT,
+            original_route_geom=ST_GeomFromText(route_wkt, 4326),
+            current_active_route=ST_GeomFromText(route_wkt, 4326),
+            estimated_arrival=now + timedelta(hours=random.randint(1, 10)),
+        )
+        new_trips.append(trip)
+
+    # 1 EMERGENCY TRIP
+    origin_node = NER_ROAD_NODES[1] # Guwahati
+    dest_node = NER_ROAD_NODES[18]  # Haflong
+    route_wkt = _build_route_wkt([1, 5, 17, 18])
+    
+    trip = VehicleTrip(
+        vehicle_id=v3.id,
+        origin_name=origin_node["name"],
+        origin_coords=ST_MakePoint(origin_node["lng"], origin_node["lat"]),
+        dest_name=dest_node["name"],
+        dest_coords=ST_MakePoint(dest_node["lng"], dest_node["lat"]),
+        commodity_type=CommodityType.MEDICINE,
+        priority_level=TripPriority.EMERGENCY,
+        status=TripStatus.IN_TRANSIT,
+        original_route_geom=ST_GeomFromText(route_wkt, 4326),
+        current_active_route=ST_GeomFromText(route_wkt, 4326),
+        estimated_arrival=now + timedelta(hours=6),
+    )
+    new_trips.append(trip)
+
+    db.add_all(new_trips)
+    await db.commit()
+    
+    return {"status": "success", "added_count": len(new_trips)}
