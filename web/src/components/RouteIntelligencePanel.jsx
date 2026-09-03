@@ -97,7 +97,9 @@ export function RouteIntelligencePanel({ trip, onAccept, onIgnore, onHalt }) {
     let isMounted = true;
     setLoading(true);
     
-    fetch(`http://localhost:8000/api/v1/routing/trip/${trip.trip_id}/alternatives`)
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    
+    fetch(`${API_BASE}/api/v1/routing/trip/${trip.trip_id}/alternatives`)
       .then(res => res.json())
       .then(data => {
         if (isMounted && data.alternatives) {
