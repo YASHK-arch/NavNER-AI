@@ -3,7 +3,7 @@ uvicorn[standard]==0.30.6
 sqlalchemy[asyncio]==2.0.35
 psycopg[binary]>=3.3.4
 geoalchemy2==0.20.0
-python-multipart==0.0.9
+python-multipart==0.0.32
 websockets==13.0
 pydantic-settings==2.15.0
 python-dotenv==1.0.1
