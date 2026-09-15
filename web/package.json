@@ -15,7 +15,7 @@
     "@turf/length": "^7.4.0",
     "@turf/line-slice-along": "^7.4.0",
     "@turf/turf": "^7.4.0",
-    "maplibre-gl": "^6.6.0",
+    "maplibre-gl": "^6.9.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
